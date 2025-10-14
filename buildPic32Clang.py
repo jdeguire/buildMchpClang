@@ -65,7 +65,7 @@ import tkinter
 import tkinter.filedialog
 import zipfile
 
-PIC32_CLANG_VERSION = '0.2.1'
+PIC32_CLANG_VERSION = '0.2.2'
 PIC32_CLANG_PROJECT_URL = 'https://github.com/jdeguire/buildPic32Clang'
 
 
@@ -89,7 +89,7 @@ CMSIS_REPO_BRANCH = 'v6.2.0'
 CMSIS_SRC_DIR = ROOT_WORKING_DIR / 'cmsis'
 
 PIC32_FILE_MAKER_REPO_URL = 'https://github.com/jdeguire/pic32-device-file-maker.git'
-PIC32_FILE_MAKER_REPO_BRANCH = 'v0.2.1'
+PIC32_FILE_MAKER_REPO_BRANCH = 'v0.4.0'
 PIC32_FILE_MAKER_SRC_DIR = ROOT_WORKING_DIR / 'pic32-device-file-maker'
 
 PIC32CLANG_DOCS_REPO_URL = 'https://github.com/jdeguire/pic32clang_docs.git'
