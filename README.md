@@ -1,11 +1,17 @@
-# buildPic32Clang
-A Python script to build Clang for PIC32 and SAM devices along with any supporting libraries.
+# buildMchpClang
+_This project used to be called "buildPic32Clang", but I changed it to avoid any trademark concerns
+with using "PIC" in the name._
 
-Right now, this supports only Arm Cortex-M devices, like most of the SAM and all of the PIC32C
-devices. MIPS and Cortex-A devices could be added in the future, but I don't have any immediate
-plans for that. MIPS is basically dead (even MIPS the company designs only RISC-V chips now) and
-I don't know enough about the Cortex-A parts to set them up properly.
+This is a Python script to build Clang for Microchip Technology's PIC32 and SAM devices along with
+any supporting libraries.
 
+Right now, this supports only Arm devices, like most of the SAM and all of the PIC32C devices. MIPS
+devices could be added in the future, but I don't have any immediate plans for that. MIPS is
+basically dead (even MIPS the company designs only RISC-V chips now), so it is unlikely to get
+much love in the future. As of this writing in October 2025, there is no MIPS target maintainer
+for LLVM.
+
+LLVM does have an AVR backend now, so in theory one could extend this to support those, too.
 
 ## Requirements
 Here's a quick list of what you need.
@@ -65,9 +71,9 @@ Mac OS users are unfortunately on their own since I don't currently own a Mac.
 
 
 ## How to Run
-For now, this script can be run by opening up a terminal interface and running `./buildPic32Clang.py`
-(Unix/Linux/WSL/etc.) or `python3 .\buildPic32Clang.py` (any of those + Windows). On Linux or Unix
-you might need to run `chmod +x ./buildPic32Clang.py` once before you run it for the first time.
+For now, this script can be run by opening up a terminal interface and running `./buildMchpClang.py`
+(Unix/Linux/WSL/etc.) or `python3 .\buildMchpClang.py` (any of those + Windows). On Linux or Unix
+you might need to run `chmod +x ./buildMchpClang.py` once before you run it for the first time.
 If you supply no arguments when running it, a usable set of defaults will be used that will try to
 clone and build all of the projects this script can handle.
 
@@ -100,15 +106,15 @@ Here are the command-line arguments you can supply to control how the script run
     either be specified as well or completed in a previous run.
     - **package**: Package all of the toolchain files into an archive for distribution. The archive
     will be a `.zip` on Windows and a `.tar.bz2` everywhere else. The top level directory in the
-    archive will contain the Pic32Clang version, so that multiple versions can easily exist together
-    on a system. The archive will be located in the "pic32clang" directory.
+    archive will contain the MchpClang version, so that multiple versions can easily exist together
+    on a system. The archive will be located in the "mchpclang" directory.
     - **all**: Do all of the above. This is the default.
 - `--packs-dir DIR`  
     Indicate where the this script can find the Microchip packs used to provide information about
     supported devices. This is used only if the `devfiles` step is active. If that step is active
     and this option is not provided, the script will pop up a dialog box asking you where the
-    packs directory is located. See the README in the `pic32-device-file-maker` project for more
-    info: https://github.com/jdeguire/pic32-device-file-maker.
+    packs directory is located. See the README in the `atdf-device-file-maker` project for more
+    info: https://github.com/jdeguire/atdf-device-file-maker.
 - `--llvm-build-type Release|Debug|RelWithDebInfo|MinSizeRel`  
     Select the CMake build type to use for LLVM. You can pick only one. The default is "Release".
 - `--llvm-branch REF`  
@@ -124,7 +130,7 @@ Here are the command-line arguments you can supply to control how the script run
     The default will be the most recent released version when the script was last updated. You can use
     the built-in help (`--help`) to see the default.
 - `--docs-branch REF`  
-    Set the LLVM for PIC32 docs git branch or tag to clone from or use "main" to get the latest sources.
+    Set the mchpClang docs git branch or tag to clone from or use "main" to get the latest sources.
     The default will be the most recent released version when the script was last updated. You can use
     the built-in help (`--help`) to see the default.
 - `--clone-all`  
@@ -160,22 +166,27 @@ Here are the command-line arguments you can supply to control how the script run
     Print the script's version info and then exit.
 
 
-## About the pic32Clang Projects
-All of these projects with "pic32Clang" in the name are here to provide you a modern Clang-based
-toolchain that can be used for Microchip Technology's PIC32 and SAM lines of 32-bit microcontrollers
-and microprocessors (not yet, but one day). This is meant as an alternative to the XC32 toolchain
-that Microchip themselves provide that supports the latest C and C++ standards and tools (such as
-Clang Tidy). This toolchains is not going to be 100% compatible with XC32 because it has things
-specific to the Microchip devices, but effort was made to at least allow not-too-terrible migration
-from one to the other. For example, most device register names should be the same between the two
-toolchains, but setting device configuration registers is different.
+## About the mchpClang Projects
+All of these projects with "mchpClang" in the name are here to provide you a modern Clang-based
+toolchain that can be used for Microchip Technology's PIC32C and SAM lines of 32-bit microcontrollers
+and microprocessors. This is meant as an alternative to the XC32 toolchain that Microchip themselves
+provide that supports the latest C and C++ standards and tools (such as Clang Tidy). This toolchains
+is not going to be 100% compatible with XC32 because it has things specific to the Microchip devices,
+but effort was made to at least allow not-too-terrible migration from one to the other. For example,
+most device register names should be the same between the two toolchains, but setting device
+configuration registers is different.
 
-Use pic32Clang if you want to be able to use the latest goodies that modern C and C++ standards have
+Use mchpClang if you want to be able to use the latest goodies that modern C and C++ standards have
 to offer on your Microchip device and you are willing to do some work and take some risk in doing so.
 Use XC32 if you're looking for a seemless out-of-the-box experience that is ready to go with the
 rest of Microchip's tools, such as the MPLAB X IDE and the Harmony Framework. XC32 also comes with
 support from people who actually know what they're doing whereas I'm just some random dude on the
 internet 😉.
+
+You will also need to use XC32 if you need support for a device not supported here. It is unlikely
+that MIPS will ever be fully supported and devices using a proprietary architecture (most of the
+8-bit and 16-bit devices) will certainly never be supported. LLVM does now have an AVR backend, so
+this could potentially be extended to support those devices.
 
 There currently isn't a fully-working IDE plugin to use Clang with MPLAB X or the MPLAB VS Code
 Extensions. I do have a an MPLAB X plugin called `toolchainPic32Clang` that you are welcome to try,
@@ -204,4 +215,4 @@ These project also refer to "Arm", "ARM", "Cortex", and "CMSIS", which are all t
 Limited.
 
 These projects are all independent efforts not affiliated with, endorsed, sponsored, or otherwise
-approved by Microchip Technology nor Arm Limited.
+approved by Microchip Technology, Arm Limited, or the LLVM Foundation.

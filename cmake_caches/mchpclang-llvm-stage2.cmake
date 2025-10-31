@@ -3,8 +3,8 @@
 #
 # This is based on an example cache file provided by Clang and originally came
 # from "llvm/clang/cmake/caches/DistributionExample-stage2.cmake". This is modified
-# to build Pic32Clang, such as by having it build support for MIPS devices and by
-# adding extra tools and options not in the original file.
+# to build mchpClang, such as by having it build support for MIPS and ARM devices and
+# by adding extra tools and options not in the original file.
 #
 # The original example file did not have a copyright or license notice, but
 # Clang is covered under a modified Apache 2.0 license. Presumably, that

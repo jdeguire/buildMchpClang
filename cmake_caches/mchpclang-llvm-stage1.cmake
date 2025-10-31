@@ -68,6 +68,6 @@ if(STAGE2_CACHE_FILE)
     CACHE STRING "")
 else()
   set(CLANG_BOOTSTRAP_CMAKE_ARGS
-    -C ${CMAKE_CURRENT_LIST_DIR}/pic32clang-llvm-stage2.cmake
+    -C ${CMAKE_CURRENT_LIST_DIR}/mchpclang-llvm-stage2.cmake
     CACHE STRING "")
 endif()

@@ -12,54 +12,54 @@
 # license is provided in LICENSE.txt.
 
 # -----
-# Pic32Clang-specific options; define these on the command line when using this script.
+# mchpClang-specific options; define these on the command line when using this script.
 # 
 
 # This is the target triple that will be passed to Clang when building the runtimes,
 # such as "mipsel-linux-gnu" or "arm-none-eabi".
-set(PIC32CLANG_TARGET_TRIPLE "" CACHE STRING "The target triple for which to build the runtimes")
+set(MCHPCLANG_TARGET_TRIPLE "" CACHE STRING "The target triple for which to build the runtimes")
 
 # These are a semicolon-delimited lists of extra flags to use when building the runtime
 # libraries. These should include target-specific flags like "-march" and FPU flags as
 # well as optimization flags. Do not include the "-target" option because this is already
-# handled with the PIC32CLANG_TARGET_TRIPLE option. Flags and their arguments should be 
+# handled with the MCHPCLANG_TARGET_TRIPLE option. Flags and their arguments should be 
 # passed as separate entries (ie. have a semicolon between them) if there would normally
 # be a space between them. Put double quotes around entries that may have spaces in them,
 # like paths, to have them treated like a single entry.
-set(PIC32CLANG_C_CXX_FLAGS "" CACHE STRING "Compiler flags for building the runtimes")
-set(PIC32CLANG_ASM_FLAGS "" CACHE STRING "Assembler flags for building the runtimes")
+set(MCHPCLANG_C_CXX_FLAGS "" CACHE STRING "Compiler flags for building the runtimes")
+set(MCHPCLANG_ASM_FLAGS "" CACHE STRING "Assembler flags for building the runtimes")
 
-# The directory path to the toolchain, presumably one that was just built for Pic32Clang,
+# The directory path to the toolchain, presumably one that was just built for chpClang,
 # that will build the runtimes. If you are doing a two-stage build (which is what the Python
 # script in the parent directory does) then you will want to point this to the stage2 build
 # location instead of the installed location. This is because the build location has extra
 # CMake files that are needed by the runtime build. Find it at 
 # "<build-prefix>/llvm/tools/clang/stage2-bins".
-set(PIC32CLANG_PATH "" CACHE PATH "The directory path to the compiler that will build the runtimes")
+set(MCHPCLANG_PATH "" CACHE PATH "The directory path to the compiler that will build the runtimes")
 
 # Use this to add a suffix to the location at which the libraries will be installed. This is used by
 # the Python script in the parent directory to create subdirectories for different variants of the
 # libraries. For example, it would set this to "r2/micromips" to install Mips32r2 microMIPS libraries 
 # at "<prefix>/lib/r2/micromips".
-set(PIC32CLANG_LIBDIR_SUFFIX "" CACHE STRING "Optionally add a suffix to the library directory name")
+set(MCHPCLANG_LIBDIR_SUFFIX "" CACHE STRING "Optionally add a suffix to the library directory name")
 
 
 # Set up options supplied above.
-if(PIC32CLANG_TARGET_TRIPLE STREQUAL "")
-    message(FATAL_ERROR "PIC32CLANG_TARGET_TRIPLE is empty. Provide a valid target.")
+if(MCHPCLANG_TARGET_TRIPLE STREQUAL "")
+    message(FATAL_ERROR "MCHPCLANG_TARGET_TRIPLE is empty. Provide a valid target.")
 endif()
 
-if(PIC32CLANG_PATH STREQUAL "")
-    message(FATAL_ERROR "PIC32CLANG_PATH is empty. Provide a valid sysroot.")
+if(MCHPCLANG_PATH STREQUAL "")
+    message(FATAL_ERROR "MCHPCLANG_PATH is empty. Provide a valid sysroot.")
 endif()
 
-if(NOT IS_DIRECTORY ${PIC32CLANG_PATH})
-    message(FATAL_ERROR "PIC32CLANG_PATH (${PIC32CLANG_PATH}) is not a directory.")
+if(NOT IS_DIRECTORY ${MCHPCLANG_PATH})
+    message(FATAL_ERROR "MCHPCLANG_PATH (${MCHPCLANG_PATH}) is not a directory.")
 endif()
 
 # Add options that will apply regardless of target.
 # TODO: We probably need to revisit these, especially if we are not using Musl anymore.
-set(PIC32CLANG_COMMON_FLAGS
+set(MCHPCLANG_COMMON_FLAGS
     -isystem
     ${CMAKE_INSTALL_PREFIX}/include
     -static
@@ -84,9 +84,9 @@ set(PIC32CLANG_COMMON_FLAGS
     -DLIBC_COPT_FLOAT_TO_STR_NO_TABLE
 )
 
-list(JOIN PIC32CLANG_COMMON_FLAGS " " PIC32CLANG_COMMON_FLAGS)
-list(JOIN PIC32CLANG_C_CXX_FLAGS " " PIC32CLANG_C_CXX_FLAGS)
-list(JOIN PIC32CLANG_ASM_FLAGS " " PIC32CLANG_ASM_FLAGS)
+list(JOIN MCHPCLANG_COMMON_FLAGS " " MCHPCLANG_COMMON_FLAGS)
+list(JOIN MCHPCLANG_C_CXX_FLAGS " " MCHPCLANG_C_CXX_FLAGS)
+list(JOIN MCHPCLANG_ASM_FLAGS " " MCHPCLANG_ASM_FLAGS)
 
 #
 # End Pic32Clang-specific stuff.
@@ -95,9 +95,9 @@ list(JOIN PIC32CLANG_ASM_FLAGS " " PIC32CLANG_ASM_FLAGS)
 # -----
 # CMake general stuff
 #
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PIC32CLANG_C_CXX_FLAGS} ${PIC32CLANG_COMMON_FLAGS}" CACHE STRING "")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PIC32CLANG_C_CXX_FLAGS} ${PIC32CLANG_COMMON_FLAGS}" CACHE STRING "")
-set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} ${PIC32CLANG_ASM_FLAGS} ${PIC32CLANG_COMMON_FLAGS}" CACHE STRING "")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${MCHPCLANG_C_CXX_FLAGS} ${MCHPCLANG_COMMON_FLAGS}" CACHE STRING "")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MCHPCLANG_C_CXX_FLAGS} ${MCHPCLANG_COMMON_FLAGS}" CACHE STRING "")
+set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} ${MCHPCLANG_ASM_FLAGS} ${MCHPCLANG_COMMON_FLAGS}" CACHE STRING "")
 
 # Set optimization and debug options based on the value of CMAKE_BUILD_TYPE. Possible values for
 # that are "Release", "Debug", "RelWithDebInfo", and "MinSizeRel". Set the build type on the
@@ -122,15 +122,15 @@ set(CMAKE_ASM_FLAGS_MINSIZEREL "-Oz -DNDEBUG" CACHE STRING "")
 
 
 set(CMAKE_CROSSCOMPILING ON CACHE BOOL "")
-set(CMAKE_SYSROOT "${PIC32CLANG_PATH}" CACHE PATH "")
-set(CMAKE_C_COMPILER "${PIC32CLANG_PATH}/bin/clang${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
-set(CMAKE_CXX_COMPILER "${PIC32CLANG_PATH}/bin/clang++${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
-set(CMAKE_AR "${PIC32CLANG_PATH}/bin/llvm-ar${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
-set(CMAKE_NM "${PIC32CLANG_PATH}/bin/llvm-nm${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
-set(CMAKE_RANLIB "${PIC32CLANG_PATH}/bin/llvm-ranlib${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
-set(CMAKE_C_COMPILER_TARGET ${PIC32CLANG_TARGET_TRIPLE} CACHE STRING "")
-set(CMAKE_CXX_COMPILER_TARGET ${PIC32CLANG_TARGET_TRIPLE} CACHE STRING "")
-set(CMAKE_ASM_COMPILER_TARGET ${PIC32CLANG_TARGET_TRIPLE} CACHE STRING "")
+set(CMAKE_SYSROOT "${MCHPCLANG_PATH}" CACHE PATH "")
+set(CMAKE_C_COMPILER "${MCHPCLANG_PATH}/bin/clang${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
+set(CMAKE_CXX_COMPILER "${MCHPCLANG_PATH}/bin/clang++${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
+set(CMAKE_AR "${MCHPCLANG_PATH}/bin/llvm-ar${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
+set(CMAKE_NM "${MCHPCLANG_PATH}/bin/llvm-nm${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
+set(CMAKE_RANLIB "${MCHPCLANG_PATH}/bin/llvm-ranlib${CMAKE_HOST_EXECUTABLE_SUFFIX}" CACHE PATH "")
+set(CMAKE_C_COMPILER_TARGET ${MCHPCLANG_TARGET_TRIPLE} CACHE STRING "")
+set(CMAKE_CXX_COMPILER_TARGET ${MCHPCLANG_TARGET_TRIPLE} CACHE STRING "")
+set(CMAKE_ASM_COMPILER_TARGET ${MCHPCLANG_TARGET_TRIPLE} CACHE STRING "")
 # This needs to be "Linux" because otherwise a CMake check will fail claiming
 # it cannot determine the target platform. 
 # TODO: Should this be "Generic" instead? That's what the example CMake cache
@@ -158,13 +158,13 @@ endif()
 set(LLVM_COMPILER_CHECKED ON CACHE BOOL "")
 set(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR OFF CACHE BOOL "")
 set(LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;libunwind" CACHE STRING "")
-set(LLVM_LIBDIR_SUFFIX "/${PIC32CLANG_LIBDIR_SUFFIX}" CACHE STRING "")
+set(LLVM_LIBDIR_SUFFIX "/${MCHPCLANG_LIBDIR_SUFFIX}" CACHE STRING "")
 set(RUNTIMES_USE_LIBC "llvm-libc" CACHE STRING "")
 
 # -----
 # Compiler-RT
 #
-set(COMPILER_RT_OS_DIR "${PIC32CLANG_LIBDIR_SUFFIX}/" CACHE STRING "")
+set(COMPILER_RT_OS_DIR "${MCHPCLANG_LIBDIR_SUFFIX}/" CACHE STRING "")
 set(COMPILER_RT_BAREMETAL_BUILD ON CACHE BOOL "")
 set(COMPILER_RT_DEFAULT_TARGET_ONLY ON CACHE BOOL "")
 set(COMPILER_RT_BUILD_BUILTINS ON CACHE BOOL "")
@@ -210,7 +210,7 @@ set(LIBUNWIND_ENABLE_ASSERTIONS OFF CACHE BOOL "")
 #       Compiler-RT options above related to Scudo. This might not be supported on baremetal.
 set(LLVM_LIBC_FULL_BUILD ON CACHE BOOL "")
 set(LLVM_LIBC_INCLUDE_SCUDO OFF CACHE BOOL "")
-set(LIBC_TARGET_TRIPLE ${PIC32CLANG_TARGET_TRIPLE} CACHE STRING "")
+set(LIBC_TARGET_TRIPLE ${MCHPCLANG_TARGET_TRIPLE} CACHE STRING "")
 # This puts all C declarations into the header files even if the implementation is not provided on
 # our target. Do this so we can provide our own implementations for things like file IO or time
 # functions.

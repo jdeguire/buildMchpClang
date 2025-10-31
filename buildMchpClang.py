@@ -30,21 +30,16 @@
 #
 # #####
 #
-# buildPic32Clang.py
+# buildMchpClang.py
 #
 # This is a script used to download and build an entire Clang-based toolchain for Microchip
 # Technology's PIC32 and SAM series of microcontroller and (eventually) microprocessor devices. The
-# intent of pic32Clang is to provide a modern toolchain that supports the latest C and C++ standards
+# intent of mchpClang is to provide a modern toolchain that supports the latest C and C++ standards
 # and tools (such as Clang Tidy). Use this if you want to be able to use the latest those standards
 # have to offer on your device and are willing to take some risk doing so. Use XC32 if you're
 # looking for a seemless out-of-the-box experience that will just work with all of Microchip's
 # tools, such as Harmony, and that is fully supported by a team of people who know what they're
 # doing as opposed to the random dude on the internet that wrote this.
-#
-# This toolchain works in tandem with the toolchainPic32Clang plugin for the MPLAB X IDE to provide
-# users with a fully-integrated experience similar to what one would get with a native Microchip
-# product. The plugin will ensure that the proper options get passed to Clang when building, so at
-# least try it out to see what that looks like, even if you do not plan to use MPLAB X full-time.
 #
 # In addition to Clang itself, this will build libraries needed to support the devices, including
 # the LLVM runtimes, CMSIS for Arm devices, and support libraries for device-specific needs (such
@@ -54,8 +49,7 @@
 import argparse
 import os
 from pathlib import Path
-import pic32_target_variants
-from pic32_target_variants import TargetVariant
+import target_variants
 import platform
 import shutil
 import subprocess
@@ -65,15 +59,15 @@ import tkinter
 import tkinter.filedialog
 import zipfile
 
-PIC32_CLANG_VERSION = '0.2.2'
-PIC32_CLANG_PROJECT_URL = 'https://github.com/jdeguire/buildPic32Clang'
+MCHP_CLANG_VERSION = '0.3.0'
+MCHP_CLANG_PROJECT_URL = 'https://github.com/jdeguire/buildMchpClang'
 
 
 # These are the build steps this script can do. The steps to be done can be given on the 
 # command line or 'all' can be used to do all of these.
 ALL_BUILD_STEPS = ['clone', 'llvm', 'runtimes', 'devfiles', 'docs', 'cmsis', 'startup', 'package']
 
-ROOT_WORKING_DIR = Path('./pic32clang')
+ROOT_WORKING_DIR = Path('./mchpclang')
 BUILD_PREFIX = ROOT_WORKING_DIR / 'build'
 INSTALL_PREFIX = ROOT_WORKING_DIR / 'install'
 
@@ -81,20 +75,20 @@ THIS_FILE_DIR = Path(os.path.dirname(os.path.realpath(__file__)))
 CMAKE_CACHE_DIR = THIS_FILE_DIR / 'cmake_caches'
 
 LLVM_REPO_URL = 'https://github.com/llvm/llvm-project.git'
-LLVM_REPO_BRANCH = 'llvmorg-21.1.0'
+LLVM_REPO_BRANCH = 'llvmorg-21.1.4'
 LLVM_SRC_DIR = ROOT_WORKING_DIR / 'llvm'
 
 CMSIS_REPO_URL = 'https://github.com/ARM-software/CMSIS_6.git'
 CMSIS_REPO_BRANCH = 'v6.2.0'
 CMSIS_SRC_DIR = ROOT_WORKING_DIR / 'cmsis'
 
-PIC32_FILE_MAKER_REPO_URL = 'https://github.com/jdeguire/pic32-device-file-maker.git'
-PIC32_FILE_MAKER_REPO_BRANCH = 'v0.4.0'
-PIC32_FILE_MAKER_SRC_DIR = ROOT_WORKING_DIR / 'pic32-device-file-maker'
+ATDF_FILE_MAKER_REPO_URL = 'https://github.com/jdeguire/atdf-device-file-maker.git'
+ATDF_FILE_MAKER_REPO_BRANCH = 'v0.5.0'
+ATDF_FILE_MAKER_SRC_DIR = ROOT_WORKING_DIR / 'atdf-device-file-maker'
 
-PIC32CLANG_DOCS_REPO_URL = 'https://github.com/jdeguire/pic32clang_docs.git'
-PIC32CLANG_DOCS_REPO_BRANCH = 'v0.1.0'
-PIC32CLANG_DOCS_SRC_DIR = ROOT_WORKING_DIR / 'pic32clang_docs'
+MCHPCLANG_DOCS_REPO_URL = 'https://github.com/jdeguire/mchpclang_docs.git'
+MCHPCLANG_DOCS_REPO_BRANCH = 'v0.2.0'
+MCHPCLANG_DOCS_SRC_DIR = ROOT_WORKING_DIR / 'mchpclang_docs'
 
 
 
@@ -316,11 +310,11 @@ def clone_selected_repos_from_git(args: argparse.Namespace) -> None:
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
 
     if args.clone_all or 'devfiles' in args.steps:
-        clone_from_git(PIC32_FILE_MAKER_REPO_URL, args.devfiles_branch, PIC32_FILE_MAKER_SRC_DIR, 
+        clone_from_git(ATDF_FILE_MAKER_REPO_URL, args.devfiles_branch, ATDF_FILE_MAKER_SRC_DIR, 
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
 
     if args.clone_all or args.build_docs:
-        clone_from_git(PIC32CLANG_DOCS_REPO_URL, args.docs_branch, PIC32CLANG_DOCS_SRC_DIR, 
+        clone_from_git(MCHPCLANG_DOCS_REPO_URL, args.docs_branch, MCHPCLANG_DOCS_SRC_DIR, 
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
 
 
@@ -333,7 +327,7 @@ def build_single_stage_llvm(args: argparse.Namespace) -> None:
     build_dir = BUILD_PREFIX / 'llvm'
     install_dir = Path(os.path.relpath(INSTALL_PREFIX, build_dir))
     src_dir = Path(os.path.relpath(LLVM_SRC_DIR / 'llvm', build_dir))
-    cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'pic32clang-llvm-stage2.cmake',
+    cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'mchpclang-llvm-stage2.cmake',
                                              build_dir))
 
     remake_dirs(build_dir)
@@ -346,7 +340,7 @@ def build_single_stage_llvm(args: argparse.Namespace) -> None:
         f'-DLLVM_PARALLEL_COMPILE_JOBS={args.compile_jobs}',
         f'-DLLVM_PARALLEL_LINK_JOBS={args.link_jobs}',
         f'-DLLVM_BUILD_DOCS={get_cmake_bool(args.build_docs)}',
-        f'-DPACKAGE_VENDOR=pic32Clang v{PIC32_CLANG_VERSION}:',
+        f'-DPACKAGE_VENDOR=mchpClang v{MCHP_CLANG_VERSION}:',
         '-C', cmake_config_path.as_posix(),
         src_dir.as_posix()
     ]
@@ -372,7 +366,7 @@ def build_two_stage_llvm(args: argparse.Namespace) -> None:
     build_dir = BUILD_PREFIX / 'llvm'
     install_dir = Path(os.path.relpath(INSTALL_PREFIX, build_dir))
     src_dir = Path(os.path.relpath(LLVM_SRC_DIR / 'llvm', build_dir))
-    cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'pic32clang-llvm-stage1.cmake',
+    cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'mchpclang-llvm-stage1.cmake',
                                              build_dir))
 
     remake_dirs(build_dir)
@@ -387,7 +381,7 @@ def build_two_stage_llvm(args: argparse.Namespace) -> None:
         f'-DCMAKE_INSTALL_PREFIX={install_dir.as_posix()}',
         f'-DLLVM_PARALLEL_COMPILE_JOBS={args.compile_jobs}',
         f'-DLLVM_PARALLEL_LINK_JOBS={args.link_jobs}',
-        f'-DPACKAGE_VENDOR=LLVM For PIC32 v{PIC32_CLANG_VERSION}:',
+        f'-DPACKAGE_VENDOR=mchpClang v{MCHP_CLANG_VERSION}:',
         f'-DBOOTSTRAP_LLVM_ENABLE_LTO={get_cmake_bool(args.enable_lto)}',
         f'-DBOOTSTRAP_CMAKE_BUILD_TYPE={args.llvm_build_type}',
         f'-DBOOTSTRAP_LLVM_PARALLEL_COMPILE_JOBS={args.compile_jobs}',
@@ -420,7 +414,7 @@ def build_two_stage_llvm(args: argparse.Namespace) -> None:
     # and just getting all the things?
 
 
-def build_llvm_runtimes(args: argparse.Namespace, variant: TargetVariant, build_docs: bool):
+def build_llvm_runtimes(args: argparse.Namespace, variant: target_variants.TargetVariant, build_docs: bool):
     '''Build LLVM runtime libraries for a single build variant.
 
     Build libc, libc++, libc++abi, libunwind, and Compiler-RT for the given build variant using its
@@ -433,7 +427,7 @@ def build_llvm_runtimes(args: argparse.Namespace, variant: TargetVariant, build_
     src_dir = Path(os.path.relpath(LLVM_SRC_DIR / 'runtimes', build_dir))
 
     toolchain_path = get_built_toolchain_abspath()
-    cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'pic32clang-target-runtimes.cmake',
+    cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'mchpclang-target-runtimes.cmake',
                                              build_dir))
 
     # This suffix goes up a level because the LLVM CMake scripts add an extra '/lib/' we don't want.
@@ -451,11 +445,11 @@ def build_llvm_runtimes(args: argparse.Namespace, variant: TargetVariant, build_
         'cmake', '-G', 'Ninja', 
         f'-DCMAKE_INSTALL_PREFIX={prefix_dir.as_posix()}',
         f'-DCMAKE_BUILD_TYPE={args.llvm_build_type}',
-        f'-DPIC32CLANG_LIBDIR_SUFFIX={libdir_suffix.as_posix()}',
-        f'-DPIC32CLANG_TARGET_TRIPLE={variant.triple}',
-        f'-DPIC32CLANG_C_CXX_FLAGS={c_options_str}',
-        f'-DPIC32CLANG_ASM_FLAGS={asm_options_str}',
-        f'-DPIC32CLANG_PATH={toolchain_path.as_posix()}',
+        f'-DMCHPCLANG_LIBDIR_SUFFIX={libdir_suffix.as_posix()}',
+        f'-DMCHPCLANG_TARGET_TRIPLE={variant.triple}',
+        f'-DMCHPCLANG_C_CXX_FLAGS={c_options_str}',
+        f'-DMCHPCLANG_ASM_FLAGS={asm_options_str}',
+        f'-DMCHPCLANG_PATH={toolchain_path.as_posix()}',
         f'-DLLVM_PARALLEL_COMPILE_JOBS={args.compile_jobs}',
         f'-DLLVM_PARALLEL_LINK_JOBS={args.link_jobs}',
         f'-DLLVM_BUILD_DOCS={get_cmake_bool(build_docs)}',
@@ -543,30 +537,30 @@ def build_llvm_runtimes(args: argparse.Namespace, variant: TargetVariant, build_
 def build_device_files(args: argparse.Namespace) -> None:
     '''Build the device-specific files like headers file and linker scripts.
     '''
-    build_dir = BUILD_PREFIX / 'pic32-device-file-maker'
-    output_dir = Path(os.path.relpath(build_dir, PIC32_FILE_MAKER_SRC_DIR))
+    build_dir = BUILD_PREFIX / 'atdf-device-file-maker'
+    output_dir = Path(os.path.relpath(build_dir, ATDF_FILE_MAKER_SRC_DIR))
 
-    versions: list[str] = str(PIC32_CLANG_VERSION).split('.')
+    versions: list[str] = str(MCHP_CLANG_VERSION).split('.')
 
     # Run the maker app.
     #
     build_cmd = [
-        'python3', './pic32-device-file-maker.py',
+        'python3', './atdf-device-file-maker.py',
         '--parse-jobs', str(args.compile_jobs),
         '--output-dir', output_dir.as_posix(),
-        '--define-macro', '__clang_pic32__',
-        '--define-macro', f'__clang_pic32_major__={versions[0]}',
-        '--define-macro', f'__clang_pic32_minor__={versions[1]}',
-        '--define-macro', f'__clang_pic32_patchevel__={versions[2]}',
-        '--define-macro', f'__clang_pic32_version__="{PIC32_CLANG_VERSION}"',
+        '--define-macro', '__mchp_clang__',
+        '--define-macro', f'__mchp_clang_major__={versions[0]}',
+        '--define-macro', f'__mchp_clang_minor__={versions[1]}',
+        '--define-macro', f'__mchp_clang_patchevel__={versions[2]}',
+        '--define-macro', f'__mchp_clang_version__="{MCHP_CLANG_VERSION}"',
         args.packs_dir.resolve().as_posix()
     ]
-    run_subprocess(build_cmd, 'Make device-specifc files', PIC32_FILE_MAKER_SRC_DIR)
+    run_subprocess(build_cmd, 'Make device-specifc files', ATDF_FILE_MAKER_SRC_DIR)
 
     # Now copy the created files into the install location.
     #
     print('Copying device files to their proper location...', end='')
-    shutil.copytree(build_dir / 'pic32-device-files',
+    shutil.copytree(build_dir / 'atdf-device-files',
                     INSTALL_PREFIX,
                     dirs_exist_ok=True)
     print('Done!')
@@ -630,8 +624,8 @@ def build_device_startup_files() -> None:
         print('\n'.join(failed_devices))
 
 
-def build_pic32clang_docs() -> None:
-    '''Build the toplevel Pic32Clang docs that are in the pic32clang_docs repository and copy them
+def build_mchpclang_docs() -> None:
+    '''Build the toplevel mchpClang docs that are in the mchpclang_docs repository and copy them
     to the install location.
     '''
     if 'nt' == os.name:
@@ -640,11 +634,11 @@ def build_pic32clang_docs() -> None:
         make_cmd = 'make'
 
     run_subprocess([make_cmd, 'html'],
-                   'Build Pic32Clang docs',
-                   PIC32CLANG_DOCS_SRC_DIR)
+                   'Build mchpClang docs',
+                   MCHPCLANG_DOCS_SRC_DIR)
 
-    print('Copying Pic32Clang docs to their proper location...', end='')
-    shutil.copytree(PIC32CLANG_DOCS_SRC_DIR / 'build' / 'html',
+    print('Copying mchpClang docs to their proper location...', end='')
+    shutil.copytree(MCHPCLANG_DOCS_SRC_DIR / 'build' / 'html',
                     INSTALL_PREFIX / 'docs',
                     dirs_exist_ok=True)
     print('Done!')
@@ -653,14 +647,14 @@ def build_pic32clang_docs() -> None:
 def pack_up_toolchain_as_zip(suffix: str = '') -> None:
     '''Pack up the install files into a .zip compressed archive.
 
-    The top level directory will contain the Pic32Clang version at the top of this script. This will
+    The top level directory will contain the mchpClang version at the top of this script. This will
     allow multiple versions to easily exist together on a system without requiring the user to figure
     that out. The file will be located in ROOT_WORKING_DIR (defined at the top of this script). 
 
     The suffix is added to the end of the compressed archive's name. Use this, for example, to
     indicate that the toolchain was built for Windows vs Linux.
     '''
-    archive_file_name: Path = ROOT_WORKING_DIR / f'pic32clang_{PIC32_CLANG_VERSION}{suffix}.zip'
+    archive_file_name: Path = ROOT_WORKING_DIR / f'mchpclang_{MCHP_CLANG_VERSION}{suffix}.zip'
 
     print(f'Creating archive {archive_file_name}; this might take a while...')
 
@@ -668,7 +662,7 @@ def pack_up_toolchain_as_zip(suffix: str = '') -> None:
     with zipfile.ZipFile(archive_file_name, mode='w', compression=zipfile.ZIP_DEFLATED,
                             allowZip64=True, compresslevel=9, strict_timestamps=False) as archive:
         for dirpath, _, filenames in os.walk(INSTALL_PREFIX):
-            archive_path = dirpath.replace(str(INSTALL_PREFIX), f'v{PIC32_CLANG_VERSION}', 1)
+            archive_path = dirpath.replace(str(INSTALL_PREFIX), f'v{MCHP_CLANG_VERSION}', 1)
 
             for f in filenames:
                 archive.write(Path(dirpath, f), str(Path(archive_path, f)))
@@ -677,20 +671,20 @@ def pack_up_toolchain_as_zip(suffix: str = '') -> None:
 def pack_up_toolchain_as_tarbz2(suffix: str = '') -> None:
     '''Pack up the install files into a .tar.bz2 compressed archive.
 
-    The top level directory will contain the Pic32Clang version at the top of this script. This will
+    The top level directory will contain the mchpClang version at the top of this script. This will
     allow multiple versions to easily exist together on a system without requiring the user to figure
     that out. The file will be located in ROOT_WORKING_DIR (defined at the top of this script). 
 
     The suffix is added to the end of the compressed archive's name. Use this, for example, to
     indicate that the toolchain was built for Windows vs Linux.
     '''
-    archive_file_name: Path = ROOT_WORKING_DIR / f'pic32clang_{PIC32_CLANG_VERSION}{suffix}.tar.bz2'
+    archive_file_name: Path = ROOT_WORKING_DIR / f'mchpclang_{MCHP_CLANG_VERSION}{suffix}.tar.bz2'
 
     print(f'Creating archive {archive_file_name}; this might take a while...')
 
     archive_file_name.unlink(missing_ok=True)
     with tarfile.open(name=archive_file_name, mode='w:bz2', compresslevel=9) as archive:
-        archive.add(INSTALL_PREFIX, arcname=f'v{PIC32_CLANG_VERSION}', recursive=True)
+        archive.add(INSTALL_PREFIX, arcname=f'v{MCHP_CLANG_VERSION}', recursive=True)
 
 
 def get_command_line_arguments() -> argparse.Namespace:
@@ -700,13 +694,13 @@ def get_command_line_arguments() -> argparse.Namespace:
     exit the program after printing the appropriate info instead of returning.
     '''
     desc_str = \
-        'Build a complete Clang toolchain for your PIC32 and SAM devices (Cortex-M only for now).' 
+        'Build a complete Clang toolchain for your PIC32 and SAM devices (ARM only for now).' 
 
     epilog_str = \
         'See the README file for more information about the arguments and running this script.'        
 
     version_str = \
-        f'buildPic32Clang {PIC32_CLANG_VERSION} ({PIC32_CLANG_PROJECT_URL})'
+        f'buildMchpClang {MCHP_CLANG_VERSION} ({MCHP_CLANG_PROJECT_URL})'
 
     # Create a help formatter that gives a bit more space between the option and help text.
     # The default seems to be 24 characters. This solution was found on:
@@ -744,13 +738,13 @@ def get_command_line_arguments() -> argparse.Namespace:
                         metavar='REF',
                         help='select CMSIS git branch to clone from (use "main" to get latest)')
     parser.add_argument('--devfiles-branch',
-                        default=PIC32_FILE_MAKER_REPO_BRANCH,
+                        default=ATDF_FILE_MAKER_REPO_BRANCH,
                         metavar='REF',
-                        help='select PIC32 device files git branch to clone from (use "main" to get latest)')
+                        help='select ATDF device files git branch to clone from (use "main" to get latest)')
     parser.add_argument('--docs-branch',
-                        default=PIC32CLANG_DOCS_REPO_BRANCH,
+                        default=MCHPCLANG_DOCS_REPO_BRANCH,
                         metavar='REF',
-                        help='select LLVM for PIC32 docs git branch to clone from (use "main" to get latest)')
+                        help='select mchpClang docs git branch to clone from (use "main" to get latest)')
     parser.add_argument('--clone-all',
                         action='store_true',
                         help='clone every git repo even if not needed')
@@ -878,7 +872,7 @@ def print_arg_info(args: argparse.Namespace) -> None:
         print('Clone from llvm repo')
 
     if args.clone_all or 'devfiles' in args.steps:
-        print('Clone from pic32-device-file-maker repo')
+        print('Clone from atdf-device-file-maker repo')
 
     if args.clone_all or 'cmsis' in args.steps:
         print('Clone from cmsis repo')
@@ -915,17 +909,17 @@ if '__main__' == __name__:
             build_two_stage_llvm(args)
 
     if 'runtimes' in args.steps:
-        arm_variants: list[TargetVariant] = pic32_target_variants.create_arm_build_variants()
+        arm_variants: list[target_variants.TargetVariant] = target_variants.create_arm_build_variants()
         build_docs = args.build_docs
         for variant in arm_variants:
             build_llvm_runtimes(args, variant, build_docs)
             build_docs = False      # We need to build the docs only once.
 
-        pic32_target_variants.create_multilib_yaml(INSTALL_PREFIX / 'arm' / 'multilib.yaml',
+        target_variants.create_multilib_yaml(INSTALL_PREFIX / 'arm' / 'multilib.yaml',
                                                     arm_variants,
                                                     get_built_toolchain_abspath(),
-                                                    PIC32_CLANG_PROJECT_URL,
-                                                    PIC32_CLANG_VERSION)
+                                                    MCHP_CLANG_PROJECT_URL,
+                                                    MCHP_CLANG_VERSION)
 
     if 'devfiles' in args.steps:
         build_device_files(args)
@@ -937,7 +931,7 @@ if '__main__' == __name__:
         build_device_startup_files()
 
     if args.build_docs or 'docs' in args.steps:
-        build_pic32clang_docs()
+        build_mchpclang_docs()
 
     if 'package' in args.steps:
         machine = platform.machine().lower()
