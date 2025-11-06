@@ -70,6 +70,19 @@ create an alias or symbolic link to map `python` to `python3`.
 Mac OS users are unfortunately on their own since I don't currently own a Mac.
 
 
+## A Quick Note About Device Packs
+Part of the build process for mchpClang is to generate things like header files, linker scripts,
+startup code, and so on, for the many PIC and SAM devices it supports. This is done using the
+`atdf-device-file-maker` project located at https://github.com/jdeguire/atdf-device-file-maker.
+That project works by looking for and parsing special files that describe Microchip parts. These
+files end in ".atdf" (hence the name of the project) and are distributed in bundles called "device
+packs". You will need to find the packs for the devices you care about and tell this script where to
+find them. This script passes that info on to the `atdf-device-file-maker` script.
+
+You should have a look at the README file in that link for more info about device packs and how you
+can get the ones you need for your devices.
+
+
 ## How to Run
 For now, this script can be run by opening up a terminal interface and running `./buildMchpClang.py`
 (Unix/Linux/WSL/etc.) or `python3 .\buildMchpClang.py` (any of those + Windows). On Linux or Unix
@@ -100,6 +113,9 @@ Here are the command-line arguments you can supply to control how the script run
     - **llvm**: Build LLVM, Clang, and supporting tools.
     - **runtimes**: Build llvm-libc, libc++, Compiler-RT, and other runtime libraries for all
     supported device variants.
+    - **docs**: Build a set of docs specific to mchpClang in HTML format. This will also build docs
+    for LLVM and/or the runtimes if those steps are selected. Some LLVM docs are build in manpage
+    format along with HTML.
     - **devfiles**: Generate device-specific files like linker scripts, header files, and so on.
     - **cmsis**: Copy the Arm CMSIS files to their proper locations.
     - **startup**: Build the startup code for the devices with this toolchain. The other steps must
@@ -113,8 +129,8 @@ Here are the command-line arguments you can supply to control how the script run
     Indicate where the this script can find the Microchip packs used to provide information about
     supported devices. This is used only if the `devfiles` step is active. If that step is active
     and this option is not provided, the script will pop up a dialog box asking you where the
-    packs directory is located. See the README in the `atdf-device-file-maker` project for more
-    info: https://github.com/jdeguire/atdf-device-file-maker.
+    packs directory is located. Relative paths are based on your current working directory. This
+    script resolves paths using Python's `Path.resolve()` function.
 - `--llvm-build-type Release|Debug|RelWithDebInfo|MinSizeRel`  
     Select the CMake build type to use for LLVM. You can pick only one. The default is "Release".
 - `--llvm-branch REF`  
@@ -151,6 +167,7 @@ Here are the command-line arguments you can supply to control how the script run
     toolchain is always built with the latest tools. This can also help ensure the same behavior
     across platforms if you plan on distributing a toolchain on, say, Linux and Windows.
 - `--build-docs`  
+    _This is deprecated; instead, add "docs" to your build steps (`--steps docs`)._  
     Also build documentation when building LLVM and the runtimes. Documents are generated in HTML
     and Unix Manpage formats for LLVM, Clang, and other tools. Only HTML is currently available for
     the runtimes. You need extra packages to build documentation; see above for what you need.
@@ -159,11 +176,79 @@ Here are the command-line arguments you can supply to control how the script run
     creating the device files. The default is 0, which will use one process per CPU. One per CPU is
     also the maximum allowed.
 - `--link-jobs`  
-    Set the number of parallel link processes to run when building the LLVM tools. LLVM docs
-    recommend one process per 15GB of memory available. The default is 0, which will use one
-    process per CPU. One per CPU is also the maximum allowed.
+    Set the number of parallel link processes to run when building the LLVM tools. The default is 1,
+    which will perform one link at a time. You can increase this if you have plenty of CPU core and
+    RAM. LLVM docs recommend one process per 15GB of memory available.
 - `--version`  
     Print the script's version info and then exit.
+
+
+## Some Examples
+Here are a few example commands you can run. Remember that on Linux you might need to use
+`chmod -x ./buildMchpClang.py` to make this script runnable.
+
+**Standard Build**  
+If you are running this script for the very first time, then you can start by running it with no
+arguments.
+
+```
+# Linux/Unix
+./buildMchpClang.py
+
+# Windows
+python3 .\buildMchpClang.py
+```
+
+This will apply useful defaults, which will clone all of the needed repos from Git and build them all
+in Release mode. This will also build documentation for LLVM, the runtime libraries, and for mchpClang
+itself. The final installation will be compressed into an archive that will be located in the `mchpClang`
+subfolder generated by this script.
+
+This script will pop up a dialog box to ask you where your device pack files are. If you do not want
+this, use the `--packs-dir` option to tell this script where the device packs are instead.
+
+The script clones tags of the repositories that corresponding to releases that were recent as of the
+last time this script was updated. Use the `--XXX-branch` options described above to pick a particular
+tag or branch.
+
+If you get an error saying that you are trying to clone repositories that already exist, you can
+delete those repos (or just delete the whole `mchpClang` subdirectory) and try again. You can also
+use the `--skip-existing` option to ignore existing repositories and continue on. That option can be
+useful if you have already run the script once and need to run it again without re-cloning repos.
+
+Have a look at the options above to see what else you can add.
+
+**Making a Source Archive**  
+You may want to download the sources and archive them for later. This is especially useful if you
+need to track versions of this toolchain that you have used to build your projects. Use this command
+to clone the needed repositories without building anything.
+
+```
+# Linux/Unix
+./buildMchpClang.py --steps clone --clone-all
+
+# Windows
+python3 .\buildMchpClang.py --steps clone --clone-all
+```
+
+This will give you the source files you need to build that version of toolchain in the future. You
+should archive the directory this README and `buildMchpClang.py` script are located in along with
+their subdirectoriees. You can ignore any `.git` folders if you have them.
+
+You will also want to find and archive the device pack files you need. You could bundle the device
+packs together with the toolchain archive to create a ready-to-build package.
+
+**Building From a Source Archive**  
+If you previously ran the above command and now have an archive of the sources, you can use the
+following command to build them.
+
+```
+# Linux/Unix
+./buildMchpClang.py --skip-existing --packs-dir <your packs location>
+
+# Windows
+.\buildMchpClang.py --skip-existing --packs-dir <your packs location>
+```
 
 
 ## About the mchpClang Projects

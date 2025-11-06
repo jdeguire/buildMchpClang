@@ -59,7 +59,7 @@ import tkinter
 import tkinter.filedialog
 import zipfile
 
-MCHP_CLANG_VERSION = '0.3.0'
+MCHP_CLANG_VERSION = '0.3.1'
 MCHP_CLANG_PROJECT_URL = 'https://github.com/jdeguire/buildMchpClang'
 
 
@@ -75,7 +75,7 @@ THIS_FILE_DIR = Path(os.path.dirname(os.path.realpath(__file__)))
 CMAKE_CACHE_DIR = THIS_FILE_DIR / 'cmake_caches'
 
 LLVM_REPO_URL = 'https://github.com/llvm/llvm-project.git'
-LLVM_REPO_BRANCH = 'llvmorg-21.1.4'
+LLVM_REPO_BRANCH = 'llvmorg-21.1.5'
 LLVM_SRC_DIR = ROOT_WORKING_DIR / 'llvm'
 
 CMSIS_REPO_URL = 'https://github.com/ARM-software/CMSIS_6.git'
@@ -313,7 +313,7 @@ def clone_selected_repos_from_git(args: argparse.Namespace) -> None:
         clone_from_git(ATDF_FILE_MAKER_REPO_URL, args.devfiles_branch, ATDF_FILE_MAKER_SRC_DIR, 
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
 
-    if args.clone_all or args.build_docs:
+    if args.clone_all or 'docs' in args.steps:
         clone_from_git(MCHPCLANG_DOCS_REPO_URL, args.docs_branch, MCHPCLANG_DOCS_SRC_DIR, 
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
 
@@ -329,6 +329,7 @@ def build_single_stage_llvm(args: argparse.Namespace) -> None:
     src_dir = Path(os.path.relpath(LLVM_SRC_DIR / 'llvm', build_dir))
     cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'mchpclang-llvm-stage2.cmake',
                                              build_dir))
+    build_docs = 'docs' in args.steps
 
     remake_dirs(build_dir)
 
@@ -339,7 +340,7 @@ def build_single_stage_llvm(args: argparse.Namespace) -> None:
         f'-DLLVM_ENABLE_LTO={get_cmake_bool(args.enable_lto)}',
         f'-DLLVM_PARALLEL_COMPILE_JOBS={args.compile_jobs}',
         f'-DLLVM_PARALLEL_LINK_JOBS={args.link_jobs}',
-        f'-DLLVM_BUILD_DOCS={get_cmake_bool(args.build_docs)}',
+        f'-DLLVM_BUILD_DOCS={get_cmake_bool(build_docs)}',
         f'-DPACKAGE_VENDOR=mchpClang v{MCHP_CLANG_VERSION}:',
         '-C', cmake_config_path.as_posix(),
         src_dir.as_posix()
@@ -349,7 +350,7 @@ def build_single_stage_llvm(args: argparse.Namespace) -> None:
     build_cmd = ['cmake', '--build', '.']
     run_subprocess(build_cmd, 'Build LLVM', build_dir)
 
-    if args.build_docs:
+    if build_docs:
         docs_cmd = ['cmake', '--build', '.', '--target', 'sphinx']
         run_subprocess(docs_cmd, 'Build LLVM Docs', build_dir)
 
@@ -368,6 +369,7 @@ def build_two_stage_llvm(args: argparse.Namespace) -> None:
     src_dir = Path(os.path.relpath(LLVM_SRC_DIR / 'llvm', build_dir))
     cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'mchpclang-llvm-stage1.cmake',
                                              build_dir))
+    build_docs = 'args' in args.steps
 
     remake_dirs(build_dir)
 
@@ -386,7 +388,7 @@ def build_two_stage_llvm(args: argparse.Namespace) -> None:
         f'-DBOOTSTRAP_CMAKE_BUILD_TYPE={args.llvm_build_type}',
         f'-DBOOTSTRAP_LLVM_PARALLEL_COMPILE_JOBS={args.compile_jobs}',
         f'-DBOOTSTRAP_LLVM_PARALLEL_LINK_JOBS={args.link_jobs}',
-        f'-DBOOTSTRAP_LLVM_BUILD_DOCS={get_cmake_bool(args.build_docs)}',
+        f'-DBOOTSTRAP_LLVM_BUILD_DOCS={get_cmake_bool(build_docs)}',
         '-C', cmake_config_path.as_posix(),
         src_dir.as_posix()
     ]
@@ -395,7 +397,7 @@ def build_two_stage_llvm(args: argparse.Namespace) -> None:
     build_cmd = ['cmake', '--build', '.', '--target', 'stage2-distribution']
     run_subprocess(build_cmd, 'Build LLVM', build_dir)
 
-    if args.build_docs:
+    if build_docs:
         docs_cmd = ['cmake', '--build', '.', '--target', 'stage2-sphinx']
         run_subprocess(docs_cmd, 'Build LLVM Docs', build_dir)
 
@@ -762,7 +764,7 @@ def get_command_line_arguments() -> argparse.Namespace:
                         help='do a single-stage LLVM build instead of two-stage')
     parser.add_argument('--build-docs',
                         action='store_true',
-                        help='build the LLVM documentation in HTML and manpage format')
+                        help='build the LLVM documentation in HTML and manpage format (use the "docs" build step instead)')
     parser.add_argument('--compile-jobs',
                         type=int,
                         default=0,
@@ -770,7 +772,7 @@ def get_command_line_arguments() -> argparse.Namespace:
                         help='number of parallel compile jobs')
     parser.add_argument('--link-jobs',
                         type=int,
-                        default=0,
+                        default=1,
                         metavar='JOBS',
                         help='number of parallel link jobs')
     parser.add_argument('--version', action='version',
@@ -824,6 +826,10 @@ def process_command_line_arguments(args: argparse.Namespace) -> None:
     if args.link_jobs <= 0  or  args.link_jobs > max_jobs:
         args.link_jobs = max_jobs
 
+    # Building docs was once a separate argument, but is now a build step.
+    if args.build_docs  and  not 'docs' in args.steps:
+        args.steps.append('docs')
+
 
 def print_arg_info(args: argparse.Namespace) -> None:
     '''Print some info indicating what arguments were selected, which might be useful for logging.
@@ -843,7 +849,7 @@ def print_arg_info(args: argparse.Namespace) -> None:
     else:
         print('Packs dir not found')
 
-    if args.build_docs:
+    if 'docs' in args.steps:
         print('Build LLVM docs')
     else:
         print('Skip LLVM docs')
@@ -876,6 +882,9 @@ def print_arg_info(args: argparse.Namespace) -> None:
 
     if args.clone_all or 'cmsis' in args.steps:
         print('Clone from cmsis repo')
+
+    if args.clone_all or 'docs' in args.steps:
+        print('Clone from mchpclang-docs repo')
 
     print('----------')
 
@@ -910,7 +919,7 @@ if '__main__' == __name__:
 
     if 'runtimes' in args.steps:
         arm_variants: list[target_variants.TargetVariant] = target_variants.create_arm_build_variants()
-        build_docs = args.build_docs
+        build_docs = 'docs' in args.steps
         for variant in arm_variants:
             build_llvm_runtimes(args, variant, build_docs)
             build_docs = False      # We need to build the docs only once.
@@ -930,7 +939,7 @@ if '__main__' == __name__:
     if 'startup' in args.steps:
         build_device_startup_files()
 
-    if args.build_docs or 'docs' in args.steps:
+    if 'docs' in args.steps:
         build_mchpclang_docs()
 
     if 'package' in args.steps:
