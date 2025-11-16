@@ -55,11 +55,9 @@ import shutil
 import subprocess
 import tarfile
 import time
-import tkinter
-import tkinter.filedialog
 import zipfile
 
-MCHP_CLANG_VERSION = '0.4.0'
+MCHP_CLANG_VERSION = '0.5.0'
 MCHP_CLANG_PROJECT_URL = 'https://github.com/jdeguire/buildMchpClang'
 
 
@@ -92,20 +90,8 @@ MCHPCLANG_DOCS_REPO_BRANCH = 'v0.2.0'
 MCHPCLANG_DOCS_SRC_DIR = ROOT_WORKING_DIR / 'mchpclang_docs'
 
 MCHP_PACK_DOWNLOADER_REPO_URL = 'https://github.com/jdeguire/mchp-pack-downloader'
-MCHP_PACK_DOWNLOADER_REPO_BRANCH = 'v1.0.1'
+MCHP_PACK_DOWNLOADER_REPO_BRANCH = 'v1.0.2'
 MCHP_PACK_DOWNLOADER_SRC_DIR = ROOT_WORKING_DIR / 'mchp-pack-downloader'
-
-
-def get_dir_from_dialog(title: str | None = None, mustexist: bool = True) -> str | None:
-    '''Open a file dialog asking the user to open a directory, returning what the user selects or
-    None if the dialog is cancelled.
-
-    The arguments let the caller specify a title for the dialog box and whether or not the choosen
-    directory must already exist. 
-    '''
-    tk_root = tkinter.Tk()
-    tk_root.withdraw()
-    return tkinter.filedialog.askdirectory(title=title, mustexist=mustexist)
 
 
 def get_cmake_bool(sel: bool) -> str:
@@ -163,7 +149,6 @@ def print_line_with_info_str(line: str, info_str: str) -> None:
 
 
 def run_subprocess(cmd_args: list[str], info_str: str, working_dir: Path | None = None, 
-                   penv: dict[str, str] | None = None, use_shell: bool = False,
                    echo_cmd: bool = False) -> None:
     '''Run the given command while printing the given step string at the end of output.
 
@@ -177,17 +162,6 @@ def run_subprocess(cmd_args: list[str], info_str: str, working_dir: Path | None 
     The third argument is the working directory that should be set before running the command. This
     can be None to have the command use the current working directory (the directory from which this
     script was run). This can be a string or a path-like object, such as something from pathlib.
-
-    The fourth argument is a map of environment variables to use. If this is None, then the
-    environment is inherited from this process. Otherwise, it must be a map in which the keys are
-    the variables names and the values are the variable values.
-
-    The fifth argument indicates if the process needs to be run in a terminal shell. This generally
-    would be needed only if the command were a shell command, such as 'ls' on a Bash shell or 'dir'
-    on the Windows command prompt, or shell scripts like the 'configure' that many projects use. If
-    this is True, then 'cmd_args' should be a single string formatted just like it would be if the
-    command were typed into the terminal. See the Python documentation for subprocess.Popen() for
-    more info.
 
     The final argument indicates if the command should be printed into the output. If True, each
     element in the command list will be separated by a single space.
@@ -204,7 +178,7 @@ def run_subprocess(cmd_args: list[str], info_str: str, working_dir: Path | None 
     prev_output = ''
     remaining_output = ''
     proc = subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, 
-                            cwd=working_dir, bufsize=0, env=penv, shell=use_shell)
+                            cwd=working_dir, bufsize=0)
 
     while None == proc.poll()  and  proc.stdout:
         while True:
@@ -320,6 +294,17 @@ def clone_selected_repos_from_git(args: argparse.Namespace) -> None:
     if args.clone_all  or  'docs' in args.steps:
         clone_from_git(MCHPCLANG_DOCS_REPO_URL, args.docs_branch, MCHPCLANG_DOCS_SRC_DIR, 
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
+
+    if args.clone_all  or  args.download_packs:
+        clone_from_git(MCHP_PACK_DOWNLOADER_REPO_URL, args.packs_dl_branch, MCHP_PACK_DOWNLOADER_SRC_DIR,
+                    skip_if_exists=args.skip_existing, full_clone=args.full_clone)
+                       
+
+def download_device_packs() -> None:
+    '''Download the latest versions of packs for devices supported by this toolchain.
+    '''
+    build_cmd = ['python3', './mchp-pack-downloader.py']
+    run_subprocess(build_cmd, 'Download device packs', MCHP_PACK_DOWNLOADER_SRC_DIR)
 
 
 def build_single_stage_llvm(args: argparse.Namespace) -> None:
@@ -540,8 +525,8 @@ def build_llvm_runtimes(args: argparse.Namespace, variant: target_variants.Targe
     libc_path.rmdir()
 
 
-def build_device_files(args: argparse.Namespace) -> None:
-    '''Build the device-specific files like headers file and linker scripts.
+def make_device_files(args: argparse.Namespace) -> None:
+    '''Make the device-specific files like headers file and linker scripts.
     '''
     build_dir = BUILD_PREFIX / 'atdf-device-file-maker'
     output_dir = Path(os.path.relpath(build_dir, ATDF_FILE_MAKER_SRC_DIR))
@@ -616,9 +601,9 @@ def build_device_startup_files() -> None:
                 'startup.c'
             ]
             run_subprocess(build_cmd, 
-                        f'Build startup (crt0.o) for {proc_dir.name.upper()}',
-                        proc_dir,
-                        echo_cmd = True)
+                           f'Build startup (crt0.o) for {proc_dir.name.upper()}',
+                           proc_dir,
+                           echo_cmd = True)
         except subprocess.CalledProcessError as err:
             devname = proc_dir.name.upper()
             failed_devices.append(devname)
@@ -694,6 +679,17 @@ def archive_zip_sources(suffix: str = '') -> None:
                 # The top-level directory has no files we want to archive.
                 continue
 
+            # Exclude the downloaded .atpack files because they're ZIP files. We already have the
+            # extracted data, so keeping the .atpack files just bloats this archive.
+            if str(MCHP_PACK_DOWNLOADER_SRC_DIR) == dirpath:
+                if 'dl' in dirnames:
+                    dirnames.remove('dl')
+
+            # Exclude .git directories from being added because they can take up a lot of space.
+            # This is especially true for LLVM's git repo.
+            if '.git' in dirnames:
+                dirnames.remove('.git')
+
             for name in filenames:
                 f = Path(dirpath, name)
                 if f.is_file():
@@ -701,8 +697,26 @@ def archive_zip_sources(suffix: str = '') -> None:
                     archive.write(f, Path(f'v{MCHP_CLANG_VERSION}', rel))
 
 
-def archive_tarbz2_sources(suffix: str = '') -> None:
-    '''Pack up the sources, including this script, into a .tar.bz2 compressed archive.
+def tar_sources_filter(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    '''This is a filter used to exclude some files from the sources tar archive.
+
+    This excludes both .git folders and the .atpack device pack archives. This is done because these
+    can be large for no real gain. In particular, the .atpack files are ZIP files and we already have
+    the extracted data so they'll just bloat the archive.
+    '''
+    if tarinfo.isdir():
+        if tarinfo.name.endswith('.git'):
+            return None
+
+        pack_dl_rel = MCHP_PACK_DOWNLOADER_SRC_DIR.relative_to(ROOT_WORKING_DIR)
+        if tarinfo.name.endswith(str(pack_dl_rel / 'dl')):
+            return None
+    
+    return tarinfo
+
+
+def archive_targz_sources(suffix: str = '') -> None:
+    '''Pack up the sources, including this script, into a .tar.gz compressed archive.
 
     The top level directory will contain the mchpClang version at the top of this script. This will
     make it easier to store multiple archives in the same location. The file will be located in
@@ -711,12 +725,12 @@ def archive_tarbz2_sources(suffix: str = '') -> None:
     The suffix is added near the end of the compressed archive's name. Use this, for example, to
     indicate that the toolchain was built for Windows vs Linux.
     '''
-    archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_src.tar.bz2'
+    archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_src.tar.gz'
 
     print(f'Archiving sources into {archive_name}; this might take a while...')
 
     archive_name.unlink(missing_ok=True)
-    with tarfile.open(name=archive_name, mode='w:bz2', compresslevel=9) as archive:
+    with tarfile.open(name=archive_name, mode='w:gz', compresslevel=9) as archive:
         # Add the files in this script directory.
         #
         script_files  = [f for f in THIS_FILE_DIR.iterdir() if f.is_file()]
@@ -736,7 +750,8 @@ def archive_tarbz2_sources(suffix: str = '') -> None:
                 continue
 
             rel = d.relative_to(ROOT_WORKING_DIR.parent)
-            archive.add(d, arcname=f'v{MCHP_CLANG_VERSION}/{rel}', recursive=True)
+            archive.add(d, arcname=f'v{MCHP_CLANG_VERSION}/{rel}', recursive=True,
+                        filter=tar_sources_filter)
 
 
 def package_zip_binary_distribution(suffix: str = '') -> None:
@@ -763,8 +778,8 @@ def package_zip_binary_distribution(suffix: str = '') -> None:
                 archive.write(Path(dirpath, f), Path(zipped_path, f))
 
 
-def package_tarbz2_binary_distribution(suffix: str = '') -> None:
-    '''Pack up the install files into a .tar.bz2 compressed archive.
+def package_targz_binary_distribution(suffix: str = '') -> None:
+    '''Pack up the install files into a .tar.gz compressed archive.
 
     The top level directory will contain the mchpClang version at the top of this script. This will
     allow multiple versions to easily exist together on a system without requiring the user to figure
@@ -773,12 +788,12 @@ def package_tarbz2_binary_distribution(suffix: str = '') -> None:
     The suffix is added near the end of the compressed archive's name. Use this, for example, to
     indicate that the toolchain was built for Windows vs Linux.
     '''
-    archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_bin.tar.bz2'
+    archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_bin.tar.gz'
 
     print(f'Packaging binaries into {archive_name}; this might take a while...')
 
     archive_name.unlink(missing_ok=True)
-    with tarfile.open(name=archive_name, mode='w:bz2', compresslevel=9) as archive:
+    with tarfile.open(name=archive_name, mode='w:gz', compresslevel=9) as archive:
         archive.add(INSTALL_PREFIX, arcname=f'v{MCHP_CLANG_VERSION}', recursive=True)
 
 
@@ -815,10 +830,20 @@ def get_command_line_arguments() -> argparse.Namespace:
                         choices=ALL_BUILD_STEPS + ['all'],
                         metavar=('STEP', 'STEPS'),
                         help='select the build steps this script should perform')
+    parser.add_argument('--skip',
+                        nargs='+',
+                        default=[],
+                        type=str.lower,
+                        choices=ALL_BUILD_STEPS + ['all'],
+                        metavar=('STEP', 'STEPS'),
+                        help='select the build steps this script should NOT perform')
     parser.add_argument('--packs-dir',
-                        default='show dialog',
+                        default='',
                         metavar='DIR',
-                        help='set location of packs directory to be read')
+                        help='supply a custom location for device packs')
+    parser.add_argument('--download-packs',
+                        action='store_true',
+                        help='force download of latest device packs')
     parser.add_argument('--llvm-build-type',
                         default='Release',
                         choices=['Release', 'Debug', 'RelWithDebInfo', 'MinSizeRel'],
@@ -827,19 +852,23 @@ def get_command_line_arguments() -> argparse.Namespace:
     parser.add_argument('--llvm-branch',
                         default=LLVM_REPO_BRANCH,
                         metavar='REF',
-                        help='select LLVM git branch to clone from (use "main" to get latest)')
+                        help='select LLVM branch to clone from (use "main" to get latest)')
     parser.add_argument('--cmsis-branch',
                         default=CMSIS_REPO_BRANCH,
                         metavar='REF',
-                        help='select CMSIS git branch to clone from (use "main" to get latest)')
+                        help='select CMSIS branch to clone from (use "main" to get latest)')
     parser.add_argument('--devfiles-branch',
                         default=ATDF_FILE_MAKER_REPO_BRANCH,
                         metavar='REF',
-                        help='select ATDF device files git branch to clone from (use "main" to get latest)')
+                        help='select ATDF device files branch to clone from (use "main" to get latest)')
     parser.add_argument('--docs-branch',
                         default=MCHPCLANG_DOCS_REPO_BRANCH,
                         metavar='REF',
-                        help='select mchpClang docs git branch to clone from (use "main" to get latest)')
+                        help='select mchpClang docs branch to clone from (use "main" to get latest)')
+    parser.add_argument('--packs-dl-branch',
+                        default=MCHP_PACK_DOWNLOADER_REPO_BRANCH,
+                        metavar='REF',
+                        help='select packs downloader branch to clone from (use "main" to get latest)')
     parser.add_argument('--clone-all',
                         action='store_true',
                         help='clone every git repo even if not needed')
@@ -855,9 +884,6 @@ def get_command_line_arguments() -> argparse.Namespace:
     parser.add_argument('--single-stage',
                         action='store_true',
                         help='do a single-stage LLVM build instead of two-stage')
-    parser.add_argument('--build-docs',
-                        action='store_true',
-                        help='build the LLVM documentation in HTML and manpage format (use the "docs" build step instead)')
     parser.add_argument('--compile-jobs',
                         type=int,
                         default=0,
@@ -872,37 +898,46 @@ def get_command_line_arguments() -> argparse.Namespace:
                         version=version_str)
 
     # The command-line arguments added above will be a part of the returned object as member
-    # variables. For example, 'args.output_dir' holds the argument for '--output_dir'.
+    # variables. For example, 'args.packs_dir' holds the argument for '--packs-dir'.
     return parser.parse_args()
 
 
 def process_command_line_arguments(args: argparse.Namespace) -> None:
-    '''Look for sentinel values in the arguments and turn them into useful values.
+    '''Do any extra processing needed for command line arguments.
+    
+    This looks for sentinel values certain arguments to turn them into useful values, checks if
+    certain arguments conflict, and applies reasonable limits to certain arguments.
     '''
     # Check the 'steps' argument to see if we should do everything.
     #
     if 'all' in args.steps:
         args.steps = ALL_BUILD_STEPS
 
-    # Check the 'packs_dir' argument to see if we need to pop up a dialog box and then ensure the
-    # directory exists. This is needed only if we want to create the device files.
-    #
-    if 'devfiles' in args.steps:
-        if 'show dialog' == args.packs_dir:
-            selected_dir = get_dir_from_dialog('Select packs directory', mustexist=True)
+    for skip in args.skip:
+        if skip in args.steps:
+            args.steps.remove(skip)
 
-            if not selected_dir:
-                print('Packs directory dialog was cancelled; exiting.')
-                exit(0)
-            else:
-                args.packs_dir = Path(selected_dir)
-        else:
+    # Figure out how we need to handle device packs. Either get them from a user-supplied location
+    # or download them. The default is to download them if we have not previously done so.
+    #
+    if args.packs_dir:
+        if args.download_packs:
+            print('You cannot use both the "--packs-dir" and "--download-packs" options at the')
+            print('same time. Either pick one or use neither to have this script decide if it')
+            print('needs to download packs.')
+            exit(0)
+        elif 'devfiles' in args.steps:
             args.packs_dir = Path(args.packs_dir)
 
-        if not args.packs_dir.exists():
-            print('You need to specify an existing packs directory when the "devfiles" step is active')
-            print(f'The directory specified was {args.packs_dir.as_posix()}')
-            exit(0)
+            if not args.packs_dir.exists():
+                print('You need to provide an existing directory when the "devfiles" step is active')
+                print(f'and you are using the "--packs-dir" option. The directory given was')
+                print(args.packs_dir.as_posix())
+                exit(0)
+    else:
+        args.packs_dir = Path(MCHP_PACK_DOWNLOADER_SRC_DIR / 'packs')
+        if not args.packs_dir.exists()  and  'devfiles' in args.steps:
+            args.download_packs = True
 
     # Check if we need to set a useful value for the number of compile and link jobs. Limit the max
     # jobs to twice the number of CPUs available. This will pick a reasonable default if the number
@@ -925,10 +960,6 @@ def process_command_line_arguments(args: argparse.Namespace) -> None:
     elif args.link_jobs > max_jobs:
         args.link_jobs = max_jobs
 
-    # Building docs was once a separate argument, but is now a build step.
-    if args.build_docs  and  not 'docs' in args.steps:
-        args.steps.append('docs')
-
 
 def print_arg_info(args: argparse.Namespace) -> None:
     '''Print some info indicating what arguments were selected, which might be useful for logging.
@@ -939,19 +970,22 @@ def print_arg_info(args: argparse.Namespace) -> None:
     print(f'Build type: {args.llvm_build_type}')
     print(f'LLVM branch: {args.llvm_branch}')
     print(f'CMSIS branch: {args.cmsis_branch}')
+    print(f'Devfiles branch: {args.devfiles_branch}')
+    print(f'mchpClang Docs branch: {args.docs_branch}')
+    print(f'Packs Downloader branch: {args.packs_dl_branch}')
     print(f'Packs directory: {args.packs_dir}')
     print(f'Compile jobs: {args.compile_jobs}')
     print(f'Link jobs: {args.link_jobs}')
 
-    if os.path.exists(args.packs_dir):
+    if args.packs_dir.exists():
         print('Packs dir found')
     else:
         print('Packs dir not found')
 
-    if 'docs' in args.steps:
-        print('Build LLVM docs')
+    if args.download_packs:
+        print('Packs will be downloaded')
     else:
-        print('Skip LLVM docs')
+        print('Packs will not be downloaded')
 
     if args.single_stage:
         print('Single stage build selected')
@@ -985,6 +1019,9 @@ def print_arg_info(args: argparse.Namespace) -> None:
     if args.clone_all or 'docs' in args.steps:
         print('Clone from mchpclang-docs repo')
 
+    if args.clone_all or args.download_packs:
+        print('Clone from mchp-pack-downloader repo')
+
     print('----------')
 
 
@@ -1010,11 +1047,14 @@ if '__main__' == __name__:
     if 'clone' in args.steps:
         clone_selected_repos_from_git(args)
 
+    if args.download_packs:
+        download_device_packs()
+
     if 'sources' in args.steps:
         if 'nt' == os.name:
             archive_zip_sources('_win_' + platform.machine().lower())
         else:
-            archive_tarbz2_sources('_linux_' + platform.machine().lower())
+            archive_targz_sources('_linux_' + platform.machine().lower())
 
     if 'llvm' in args.steps:
         if args.single_stage:
@@ -1036,7 +1076,7 @@ if '__main__' == __name__:
                                              MCHP_CLANG_VERSION)
 
     if 'devfiles' in args.steps:
-        build_device_files(args)
+        make_device_files(args)
 
     if 'cmsis' in args.steps:
         copy_cmsis_files()
@@ -1051,7 +1091,7 @@ if '__main__' == __name__:
         if 'nt' == os.name:
             package_zip_binary_distribution('_win_' + platform.machine().lower())
         else:
-            package_tarbz2_binary_distribution('_linux_' + platform.machine().lower())
+            package_targz_binary_distribution('_linux_' + platform.machine().lower())
 
     # Do this extra print because otherwise the info string will be below where the command prompt
     # re-appears after this ends.

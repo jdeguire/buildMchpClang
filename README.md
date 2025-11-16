@@ -33,8 +33,7 @@ In the installer, select "Desktop development with C++" then on the right side a
 
 If you install Python using the installer from the Python website, you need to make sure your PATH
 is updated. There is a little checkbox early on in the installer that is easy to miss to do that.
-You might also see an option to install "tcl/tk" or something like that. You want that selected. If
-you install Python from the Windows Store, then these should be handled for you.
+If you install Python from the Windows Store, then this should be handled for you.
 
 Once you install Python, you'll need to install a couple of packages using Python's package manager.
 You need `pyyaml` at minimum. You can get it with `pip3 install pyyaml`. If you want to build the
@@ -53,10 +52,6 @@ Your Python version might be a little old, but it may still work if it isn't too
 Something like Python 3.8 might be okay. If you're using a Debian or similar distribution--say
 Ubuntu or PopOS--you can get the `build-essential` package for a toolchain.
 
-For Python, You may need to install `tkinter` from your system's package manager. The name of the 
-package will vary based on your distribution, but will likely be something like `python3-tk` or
-`python3-tkinter`. You cannot install this from `pip`, Python's package manager.
-
 You'll also need to install `pyyaml`. Try running `pip install pyyaml` to do that. If you get a message
 about your environment being "externally managed", then you'll need to use your system's package
 manager instead. The package name may vary from distro to distro, but on Ubuntu you need the
@@ -72,23 +67,33 @@ create an alias or symbolic link to map `python` to `python3`.
 Mac OS users are unfortunately on their own since I don't currently own a Mac.
 
 
-## A Quick Note About Device Packs
+## A Note About Device Packs
 Part of the build process for mchpClang is to generate things like header files, linker scripts,
 startup code, and so on, for the many PIC and SAM devices it supports. This is done using the
 `atdf-device-file-maker` project located at https://github.com/jdeguire/atdf-device-file-maker.
 That project works by looking for and parsing special files that describe Microchip parts. These
 files end in ".atdf" (hence the name of the project) and are distributed in bundles called "device
-packs". You will need to find the packs for the devices you care about and tell this script where to
-find them. This script passes that info on to the `atdf-device-file-maker` script.
+packs". 
 
-You should have a look at the README file in that link for more info about device packs and how you
-can get the ones you need for your devices.
+This script can use the `mchp-pack-downloader` script to get packs for you from Microchip's pack
+repository. You can find the downloader script at https://github.com/jdeguire/mchp-pack-downloader.
+The default behavior is to check if packs have already been downloaded and use those if so. If packs
+have not been downloaded, then this script will run the downloader script to get the latest versions
+of the packs for the devices this toolchain supports. This script looks for the `packs/` directory
+created by the downloader script to determine if packs have been already downloaded. This default
+behavior occurs only if the `devfiles` build step is active. All steps are active by default.
+
+You can force packs to be redownloaded by supplying the `--download-packs` command-line argument.
+This can be handy if you want to ensure you have the latest packs or if you are creating a source
+archive. You can also instead supply your own packs to use with the `--packs-dir` option.
+You cannot supply both arguments at the same time and doing so will cause this script to exit with
+an error telling you this.
 
 
 ## How to Run
-For now, this script can be run by opening up a terminal interface and running `./buildMchpClang.py`
-(Unix/Linux/WSL/etc.) or `python3 .\buildMchpClang.py` (any of those + Windows). On Linux or Unix
-you might need to run `chmod +x ./buildMchpClang.py` once before you run it for the first time.
+Open up a terminal on your system and navigate to where the script is located. Run either
+`./buildMchpClang.py` (Unix/Linux/WSL/etc.) or `python3 .\buildMchpClang.py` (Windows). On Linux or
+Unix you might need to run `chmod +x ./buildMchpClang.py` once before you run it for the first time.
 If you supply no arguments when running it, a usable set of defaults will be used that will try to
 clone and build all of the projects this script can handle.
 
@@ -133,12 +138,21 @@ Here are the command-line arguments you can supply to control how the script run
     The top level directory in the archive will contain the MchpClang version, so that multiple versions
     can easily exist together on a system. The archive will be located in the `mchpclang/` directory.
     - **all**: Do all of the above. This is the default.
+- `--skip STEPS`  
+    Like the `--steps` argument but this instead removes steps. Use this when you want to do all but
+    a few steps. The script processes the `--steps` argument first and then uses this one to determine
+    what to remove.
 - `--packs-dir DIR`  
-    Indicate where the this script can find the Microchip packs used to provide information about
-    supported devices. This is used only if the `devfiles` step is active. If that step is active
-    and this option is not provided, the script will pop up a dialog box asking you where the
-    packs directory is located. Relative paths are based on your current working directory. This
-    script resolves paths using Python's `Path.resolve()` function.
+    Provide a directory at which this script can find Microchip device packs instead of having to
+    download them. This is used only if the `devfiles` step is active. Relative paths are based on
+    your current working directory. This script resolves paths using Python's `Path.resolve()` 
+    function. This cannot be used with the `--download-packs` option. See [above](#a-note-about-device-packs)
+    for more info on packs and how this script handles them.
+- `--download-packs`  
+    Redownload device packs even if packs were found by this script. This is useful if you want to
+    ensure you have the latest packs or if you want to create a source archive. This cannot be used
+    with the `--packs-dir` option. See [above](#a-note-about-device-packs) for more info on packs
+    and how this script handles them.
 - `--llvm-build-type Release|Debug|RelWithDebInfo|MinSizeRel`  
     Select the CMake build type to use for LLVM. You can pick only one. The default is "Release".
 - `--llvm-branch REF`  
@@ -157,6 +171,10 @@ Here are the command-line arguments you can supply to control how the script run
     Set the mchpClang docs git branch or tag to clone from or use "main" to get the latest sources.
     The default will be the most recent released version when the script was last updated. You can use
     the built-in help (`--help`) to see the default.
+- `--packs-dl-branch REF`  
+    Set the `mchp-pack-downloader` git branch or tag to clone from or use "main" to get the latest
+    sources. The default will be the most recent released version when the script was last updated.
+    You can use the built-in help (`--help`) to see the default.
 - `--clone-all`  
     Clone every git repo even when not all of them are needed to complete the steps provided with
     `--steps`. This can be useful for creating a source archive. See the examples below for how to
@@ -175,11 +193,6 @@ Here are the command-line arguments you can supply to control how the script run
     useful for development. A two-stage build is normally recommended so that the distributed
     toolchain is always built with the latest tools. This can also help ensure the same behavior
     across platforms if you plan on distributing a toolchain on, say, Linux and Windows.
-- `--build-docs`  
-    _This is deprecated; instead, add "docs" to your build steps (`--steps docs`)._  
-    Also build documentation when building LLVM and the runtimes. Documents are generated in HTML
-    and Unix Manpage formats for LLVM, Clang, and other tools. Only HTML is currently available for
-    the runtimes. You need extra packages to build documentation; see above for what you need.
 - `--compile-jobs`  
     Set the number of parallel compile processes to run when building any of the tools and when
     creating the device files. The default is 0, which will use one process per CPU. Two per CPU
@@ -193,17 +206,16 @@ Here are the command-line arguments you can supply to control how the script run
     Print the script's version info and then exit.
 
 
-## Some Examples
-Here are a few example commands you can run. These assume that your command prompt is at the directory
-in which the script is located. You can run the script from a different directory if you want. The
-script will create a `mchpclang/` subdirectory in the directory from which you run it.
-
-Remember that on Linux you might need to use `chmod -x ./buildMchpClang.py` to make this script
-runnable.
+## Run Examples
+Here are a few example commands you can run. You should navigate your terminal to the location in
+which this script is located. Remember that on Linux you might need to use `chmod +x ./buildMchpClang.py`
+to make this script runnable.
 
 **Standard Build**  
 If you are running this script for the very first time, then you can start by running it with no
-arguments.
+arguments. If you have run this before and want to ensure you clone the proper set of sources, then
+delete the `mchpclang/` subdirectory if it exists. This is particularly important if you updated this
+script so that you can get the proper tool versions.
 
 ```
 # Linux/Unix
@@ -214,19 +226,17 @@ python3 .\buildMchpClang.py
 ```
 
 This will apply useful defaults, which will clone all of the needed repos from Git and build them all
-in Release mode. This will also build documentation for LLVM, the runtime libraries, and for mchpClang
-itself. All of the sources and the final installation will be compressed into two archives that will
-be located in the `mchpClang/` subdirectory generated by this script.
-
-This script will pop up a dialog box to ask you where your device pack files are. If you do not want
-this, use the `--packs-dir` option to tell this script where the device packs are instead.
+in Release mode. This will also download device packs for you if needed. Finally, this will build
+documentation for LLVM, the runtime libraries, and for mchpClang itself. All of the sources and the
+final installation will be compressed into two archives that will be located in the `mchpclang/`
+subdirectory generated by this script.
 
 The script clones tags of the repositories that corresponding to releases that were recent as of the
 last time this script was updated. Use the `--XXX-branch` options described above to pick a particular
 tag or branch.
 
 If you get an error saying that you are trying to clone repositories that already exist, you can
-delete those repos (or just delete the whole `mchpClang/` subdirectory) and try again. You can also
+delete those repos (or just delete the whole `mchpclang/` subdirectory) and try again. You can also
 use the `--skip-existing` option to ignore existing repositories and continue on. That option can be
 useful if you have already run the script once and need to run it again without re-cloning repos.
 
@@ -239,27 +249,30 @@ to clone the needed repositories without building anything.
 
 ```
 # Linux/Unix
-./buildMchpClang.py --steps clone sources --clone-all
+./buildMchpClang.py --steps clone sources --clone-all --download-packs
 
 # Windows
-python3 .\buildMchpClang.py --steps clone sources --clone-all
+python3 .\buildMchpClang.py --steps clone sources --clone-all --download-packs
 ```
 
 This will clone the source files you need to build that version of toolchain in the future and pack
-them into an archive. The archive will be located in the `mchpclang/` subdirectory generated by this
-script.
+them into an archive. This will also download the latest versions of device packs for the devices
+this toolchain supports and add those to the archive. The archive will be located in the `mchpclang/`
+subdirectory generated by this script.
 
 **Building From a Source Archive**  
 If you previously ran the above command and now have an archive of the sources, extract the contents
-of the archive and navigate your console to the `buildMchpClang.py` script in the newly-created
-directory. You can use the following command to build the sources.
+of the archive and navigate your console to the `buildMchpClang.py` script in the new directory.
+Having your terminal's "working directory" be the script's location is particularly important when
+you are building from an archive. You can use the following command to build the sources using the
+device packs you previously retrieved using the above command.
 
 ```
 # Linux/Unix
-./buildMchpClang.py --skip-existing --packs-dir <your packs location>
+./buildMchpClang.py --skip clone sources
 
 # Windows
-python3 .\buildMchpClang.py --skip-existing --packs-dir <your packs location>
+python3 .\buildMchpClang.py --skip clone sources
 ```
 
 
