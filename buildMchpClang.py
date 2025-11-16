@@ -59,13 +59,13 @@ import tkinter
 import tkinter.filedialog
 import zipfile
 
-MCHP_CLANG_VERSION = '0.3.1'
+MCHP_CLANG_VERSION = '0.4.0'
 MCHP_CLANG_PROJECT_URL = 'https://github.com/jdeguire/buildMchpClang'
 
 
 # These are the build steps this script can do. The steps to be done can be given on the 
 # command line or 'all' can be used to do all of these.
-ALL_BUILD_STEPS = ['clone', 'llvm', 'runtimes', 'devfiles', 'docs', 'cmsis', 'startup', 'package']
+ALL_BUILD_STEPS = ['clone', 'sources', 'llvm', 'runtimes', 'devfiles', 'docs', 'cmsis', 'startup', 'distribution']
 
 ROOT_WORKING_DIR = Path('./mchpclang')
 BUILD_PREFIX = ROOT_WORKING_DIR / 'build'
@@ -73,6 +73,7 @@ INSTALL_PREFIX = ROOT_WORKING_DIR / 'install'
 
 THIS_FILE_DIR = Path(os.path.dirname(os.path.realpath(__file__)))
 CMAKE_CACHE_DIR = THIS_FILE_DIR / 'cmake_caches'
+TESTS_DIR = THIS_FILE_DIR / 'test'
 
 LLVM_REPO_URL = 'https://github.com/llvm/llvm-project.git'
 LLVM_REPO_BRANCH = 'llvmorg-21.1.5'
@@ -83,13 +84,16 @@ CMSIS_REPO_BRANCH = 'v6.2.0'
 CMSIS_SRC_DIR = ROOT_WORKING_DIR / 'cmsis'
 
 ATDF_FILE_MAKER_REPO_URL = 'https://github.com/jdeguire/atdf-device-file-maker.git'
-ATDF_FILE_MAKER_REPO_BRANCH = 'v0.5.0'
+ATDF_FILE_MAKER_REPO_BRANCH = 'v0.5.2'
 ATDF_FILE_MAKER_SRC_DIR = ROOT_WORKING_DIR / 'atdf-device-file-maker'
 
 MCHPCLANG_DOCS_REPO_URL = 'https://github.com/jdeguire/mchpclang_docs.git'
 MCHPCLANG_DOCS_REPO_BRANCH = 'v0.2.0'
 MCHPCLANG_DOCS_SRC_DIR = ROOT_WORKING_DIR / 'mchpclang_docs'
 
+MCHP_PACK_DOWNLOADER_REPO_URL = 'https://github.com/jdeguire/mchp-pack-downloader'
+MCHP_PACK_DOWNLOADER_REPO_BRANCH = 'v1.0.1'
+MCHP_PACK_DOWNLOADER_SRC_DIR = ROOT_WORKING_DIR / 'mchp-pack-downloader'
 
 
 def get_dir_from_dialog(title: str | None = None, mustexist: bool = True) -> str | None:
@@ -305,15 +309,15 @@ def clone_selected_repos_from_git(args: argparse.Namespace) -> None:
         clone_from_git(LLVM_REPO_URL, args.llvm_branch, LLVM_SRC_DIR, 
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
 
-    if args.clone_all or 'cmsis' in args.steps:
+    if args.clone_all  or  'cmsis' in args.steps:
         clone_from_git(CMSIS_REPO_URL, args.cmsis_branch, CMSIS_SRC_DIR, 
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
 
-    if args.clone_all or 'devfiles' in args.steps:
+    if args.clone_all  or  'devfiles' in args.steps:
         clone_from_git(ATDF_FILE_MAKER_REPO_URL, args.devfiles_branch, ATDF_FILE_MAKER_SRC_DIR, 
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
 
-    if args.clone_all or 'docs' in args.steps:
+    if args.clone_all  or  'docs' in args.steps:
         clone_from_git(MCHPCLANG_DOCS_REPO_URL, args.docs_branch, MCHPCLANG_DOCS_SRC_DIR, 
                     skip_if_exists=args.skip_existing, full_clone=args.full_clone)
 
@@ -646,46 +650,135 @@ def build_mchpclang_docs() -> None:
     print('Done!')
 
 
-def pack_up_toolchain_as_zip(suffix: str = '') -> None:
+def archive_zip_sources(suffix: str = '') -> None:
+    '''Pack up the sources, including this script, into a .zip compressed archive.
+
+    The top level directory will contain the mchpClang version at the top of this script. This will
+    make it easier to store multiple archives in the same location. The file will be located in
+    ROOT_WORKING_DIR (defined at the top of this script).
+
+    The suffix is added near the end of the compressed archive's name. Use this, for example, to
+    indicate that the toolchain was built for Windows vs Linux.
+    '''
+    archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_src.zip'
+
+    print(f'Archiving sources into {archive_name}; this might take a while...')
+
+    archive_name.unlink(missing_ok=True)
+    with zipfile.ZipFile(archive_name, mode='w', compression=zipfile.ZIP_DEFLATED,
+                            allowZip64=True, compresslevel=9, strict_timestamps=False) as archive:
+        # Pack up the files in this script's directory
+        #
+        script_files  = [f for f in THIS_FILE_DIR.iterdir() if f.is_file()]
+        script_files += [f for f in CMAKE_CACHE_DIR.iterdir() if f.is_file()]
+        script_files += [f for f in TESTS_DIR.iterdir() if f.is_file()]
+
+        for f in script_files:
+            rel = f.relative_to(THIS_FILE_DIR)
+            archive.write(f, Path(f'v{MCHP_CLANG_VERSION}', rel))
+
+        # Pack up the source files we cloned or downloaded
+        #
+        for dirpath, dirnames, filenames in os.walk(ROOT_WORKING_DIR):
+            # Remove the install and build directories at the top of the working directory
+            # from the walk.
+            if str(ROOT_WORKING_DIR) == dirpath:
+                install_subdir = str(INSTALL_PREFIX.relative_to(ROOT_WORKING_DIR))
+                if install_subdir in dirnames:
+                    dirnames.remove(install_subdir)
+
+                build_subdir = str(BUILD_PREFIX.relative_to(ROOT_WORKING_DIR))
+                if build_subdir in dirnames:
+                    dirnames.remove(build_subdir)
+
+                # The top-level directory has no files we want to archive.
+                continue
+
+            for name in filenames:
+                f = Path(dirpath, name)
+                if f.is_file():
+                    rel = f.relative_to(ROOT_WORKING_DIR.parent)
+                    archive.write(f, Path(f'v{MCHP_CLANG_VERSION}', rel))
+
+
+def archive_tarbz2_sources(suffix: str = '') -> None:
+    '''Pack up the sources, including this script, into a .tar.bz2 compressed archive.
+
+    The top level directory will contain the mchpClang version at the top of this script. This will
+    make it easier to store multiple archives in the same location. The file will be located in
+    ROOT_WORKING_DIR (defined at the top of this script).
+
+    The suffix is added near the end of the compressed archive's name. Use this, for example, to
+    indicate that the toolchain was built for Windows vs Linux.
+    '''
+    archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_src.tar.bz2'
+
+    print(f'Archiving sources into {archive_name}; this might take a while...')
+
+    archive_name.unlink(missing_ok=True)
+    with tarfile.open(name=archive_name, mode='w:bz2', compresslevel=9) as archive:
+        # Add the files in this script directory.
+        #
+        script_files  = [f for f in THIS_FILE_DIR.iterdir() if f.is_file()]
+        script_files += [f for f in CMAKE_CACHE_DIR.iterdir() if f.is_file()]
+        script_files += [f for f in TESTS_DIR.iterdir() if f.is_file()]
+
+        for f in script_files:
+            rel = f.relative_to(THIS_FILE_DIR)
+            archive.add(f, arcname=f'v{MCHP_CLANG_VERSION}/{rel}', recursive=False)
+
+        # Add the files we cloned or downloaded.
+        #
+        src_dirs = [d for d in ROOT_WORKING_DIR.iterdir() if d.is_dir()]
+        for d in src_dirs:
+            # Skip our install and build directories.
+            if d == BUILD_PREFIX  or  d == INSTALL_PREFIX:
+                continue
+
+            rel = d.relative_to(ROOT_WORKING_DIR.parent)
+            archive.add(d, arcname=f'v{MCHP_CLANG_VERSION}/{rel}', recursive=True)
+
+
+def package_zip_binary_distribution(suffix: str = '') -> None:
     '''Pack up the install files into a .zip compressed archive.
 
     The top level directory will contain the mchpClang version at the top of this script. This will
     allow multiple versions to easily exist together on a system without requiring the user to figure
     that out. The file will be located in ROOT_WORKING_DIR (defined at the top of this script). 
 
-    The suffix is added to the end of the compressed archive's name. Use this, for example, to
+    The suffix is added near the end of the compressed archive's name. Use this, for example, to
     indicate that the toolchain was built for Windows vs Linux.
     '''
-    archive_file_name: Path = ROOT_WORKING_DIR / f'mchpclang_{MCHP_CLANG_VERSION}{suffix}.zip'
+    archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_bin.zip'
 
-    print(f'Creating archive {archive_file_name}; this might take a while...')
+    print(f'Packaging binaries into {archive_name}; this might take a while...')
 
-    archive_file_name.unlink(missing_ok=True)
-    with zipfile.ZipFile(archive_file_name, mode='w', compression=zipfile.ZIP_DEFLATED,
+    archive_name.unlink(missing_ok=True)
+    with zipfile.ZipFile(archive_name, mode='w', compression=zipfile.ZIP_DEFLATED,
                             allowZip64=True, compresslevel=9, strict_timestamps=False) as archive:
         for dirpath, _, filenames in os.walk(INSTALL_PREFIX):
-            archive_path = dirpath.replace(str(INSTALL_PREFIX), f'v{MCHP_CLANG_VERSION}', 1)
+            zipped_path = dirpath.replace(str(INSTALL_PREFIX), f'v{MCHP_CLANG_VERSION}', 1)
 
             for f in filenames:
-                archive.write(Path(dirpath, f), str(Path(archive_path, f)))
+                archive.write(Path(dirpath, f), Path(zipped_path, f))
 
 
-def pack_up_toolchain_as_tarbz2(suffix: str = '') -> None:
+def package_tarbz2_binary_distribution(suffix: str = '') -> None:
     '''Pack up the install files into a .tar.bz2 compressed archive.
 
     The top level directory will contain the mchpClang version at the top of this script. This will
     allow multiple versions to easily exist together on a system without requiring the user to figure
     that out. The file will be located in ROOT_WORKING_DIR (defined at the top of this script). 
 
-    The suffix is added to the end of the compressed archive's name. Use this, for example, to
+    The suffix is added near the end of the compressed archive's name. Use this, for example, to
     indicate that the toolchain was built for Windows vs Linux.
     '''
-    archive_file_name: Path = ROOT_WORKING_DIR / f'mchpclang_{MCHP_CLANG_VERSION}{suffix}.tar.bz2'
+    archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_bin.tar.bz2'
 
-    print(f'Creating archive {archive_file_name}; this might take a while...')
+    print(f'Packaging binaries into {archive_name}; this might take a while...')
 
-    archive_file_name.unlink(missing_ok=True)
-    with tarfile.open(name=archive_file_name, mode='w:bz2', compresslevel=9) as archive:
+    archive_name.unlink(missing_ok=True)
+    with tarfile.open(name=archive_name, mode='w:bz2', compresslevel=9) as archive:
         archive.add(INSTALL_PREFIX, arcname=f'v{MCHP_CLANG_VERSION}', recursive=True)
 
 
@@ -707,7 +800,7 @@ def get_command_line_arguments() -> argparse.Namespace:
     # Create a help formatter that gives a bit more space between the option and help text.
     # The default seems to be 24 characters. This solution was found on:
     # https://stackoverflow.com/questions/52605094/python-argparse-increase-space-between-parameter-and-description
-    wider_formatter = lambda prog: argparse.ArgumentDefaultsHelpFormatter(prog, max_help_position=28)
+    wider_formatter = lambda prog: argparse.ArgumentDefaultsHelpFormatter(prog, max_help_position=32)
 
     parser = argparse.ArgumentParser(description=desc_str, 
                                      epilog=epilog_str,
@@ -812,18 +905,24 @@ def process_command_line_arguments(args: argparse.Namespace) -> None:
             exit(0)
 
     # Check if we need to set a useful value for the number of compile and link jobs. Limit the max
-    # jobs to the number of CPUs available. This will pick a reasonable default if the number of
-    # CPUs could not be determined for some reason.
+    # jobs to twice the number of CPUs available. This will pick a reasonable default if the number
+    # of CPUs could not be determined for some reason.
     #
-    max_jobs: int | None = os.cpu_count()
+    num_cpus: int | None = os.cpu_count()
 
-    if max_jobs is None:
-        max_jobs = 2
+    if not num_cpus:
+        num_cpus = 1
 
-    if args.compile_jobs <= 0  or  args.compile_jobs > max_jobs:
+    max_jobs = 2 * num_cpus
+
+    if args.compile_jobs <= 0:
+        args.compile_jobs = num_cpus
+    elif args.compile_jobs > max_jobs:
         args.compile_jobs = max_jobs
 
-    if args.link_jobs <= 0  or  args.link_jobs > max_jobs:
+    if args.link_jobs <= 0:
+        args.link_jobs = num_cpus
+    elif args.link_jobs > max_jobs:
         args.link_jobs = max_jobs
 
     # Building docs was once a separate argument, but is now a build step.
@@ -911,6 +1010,12 @@ if '__main__' == __name__:
     if 'clone' in args.steps:
         clone_selected_repos_from_git(args)
 
+    if 'sources' in args.steps:
+        if 'nt' == os.name:
+            archive_zip_sources('_win_' + platform.machine().lower())
+        else:
+            archive_tarbz2_sources('_linux_' + platform.machine().lower())
+
     if 'llvm' in args.steps:
         if args.single_stage:
             build_single_stage_llvm(args)
@@ -925,10 +1030,10 @@ if '__main__' == __name__:
             build_docs = False      # We need to build the docs only once.
 
         target_variants.create_multilib_yaml(INSTALL_PREFIX / 'arm' / 'multilib.yaml',
-                                                    arm_variants,
-                                                    get_built_toolchain_abspath(),
-                                                    MCHP_CLANG_PROJECT_URL,
-                                                    MCHP_CLANG_VERSION)
+                                             arm_variants,
+                                             get_built_toolchain_abspath(),
+                                             MCHP_CLANG_PROJECT_URL,
+                                             MCHP_CLANG_VERSION)
 
     if 'devfiles' in args.steps:
         build_device_files(args)
@@ -942,13 +1047,11 @@ if '__main__' == __name__:
     if 'docs' in args.steps:
         build_mchpclang_docs()
 
-    if 'package' in args.steps:
-        machine = platform.machine().lower()
-
+    if 'distribution' in args.steps:
         if 'nt' == os.name:
-            pack_up_toolchain_as_zip('_win_' + machine)
+            package_zip_binary_distribution('_win_' + platform.machine().lower())
         else:
-            pack_up_toolchain_as_tarbz2('_linux_' + machine)
+            package_tarbz2_binary_distribution('_linux_' + platform.machine().lower())
 
     # Do this extra print because otherwise the info string will be below where the command prompt
     # re-appears after this ends.

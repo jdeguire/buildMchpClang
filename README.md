@@ -22,6 +22,8 @@ Here's a quick list of what you need.
 - Ninja
 - Git
 
+The subsections below will also list a few extra Python packages you need and how to get them.
+
 ### Windows
 You can find installers for all of the above apps for Windows. You will need to add CMake and Ninja
 to your PATH. I cheated and just put `ninja.exe` into the same directory as `cmake.exe`. For a
@@ -103,13 +105,19 @@ Here are the command-line arguments you can supply to control how the script run
 
 - `--help` or `-h`  
     Print a brief summary of these arguments and then exit.
-- `--steps {[clone, llvm, runtimes, devfiles, cmsis, startup, package, all]}`  
+- `--steps {[clone, sources, llvm, runtimes, docs, devfiles, cmsis, startup, distribution, all]}`  
     Select what this script should build and if it should clone the git repo for the selected 
     componenets first. Any combination of options works as long as at least one is provided. Use
     "all" to clone and build everything, which is the default.
 
     - **clone**: Clone the needed git repos before building. The default is to clone only what is
     needed based on the other steps selected. Add the `--clone-all` argument to clone everything.
+    - **sources**: Package all of the cloned and downloaded sources into a source archive before
+    building anything. This will keep the sources in case you ever need to rebuild a particular
+    version of this toolchain. The archive will be a `.zip` on Windows and a `.tar.bz2` everywhere
+    else. The top level directory in the archive will contain the MchpClang version, so that multiple
+    versions can easily exist together on a system. The archive will be located in the `mchpclang/`
+    directory.
     - **llvm**: Build LLVM, Clang, and supporting tools.
     - **runtimes**: Build llvm-libc, libc++, Compiler-RT, and other runtime libraries for all
     supported device variants.
@@ -120,10 +128,10 @@ Here are the command-line arguments you can supply to control how the script run
     - **cmsis**: Copy the Arm CMSIS files to their proper locations.
     - **startup**: Build the startup code for the devices with this toolchain. The other steps must
     either be specified as well or completed in a previous run.
-    - **package**: Package all of the toolchain files into an archive for distribution. The archive
-    will be a `.zip` on Windows and a `.tar.bz2` everywhere else. The top level directory in the
-    archive will contain the MchpClang version, so that multiple versions can easily exist together
-    on a system. The archive will be located in the "mchpclang" directory.
+    - **distribution**: Package all of the toolchain binaries and supporting files into an archive
+    ready for distribution. The archive will be a `.zip` on Windows and a `.tar.bz2` everywhere else.
+    The top level directory in the archive will contain the MchpClang version, so that multiple versions
+    can easily exist together on a system. The archive will be located in the `mchpclang/` directory.
     - **all**: Do all of the above. This is the default.
 - `--packs-dir DIR`  
     Indicate where the this script can find the Microchip packs used to provide information about
@@ -151,10 +159,11 @@ Here are the command-line arguments you can supply to control how the script run
     the built-in help (`--help`) to see the default.
 - `--clone-all`  
     Clone every git repo even when not all of them are needed to complete the steps provided with
-    `--steps`. Use `--steps clone --clone-all` to create an archive of the sources for later use.
+    `--steps`. This can be useful for creating a source archive. See the examples below for how to
+    do that.
 - `--full-clone`  
     Clone the full histories of the git repos accessed by this script. This can be useful for
-    development or if you want to archive the fully history of repositories. The default is to do
+    development or if you want to archive the full history of repositories. The default is to do
     only shallow clones such that no prior history is cloned.
 - `--skip-existing`  
     Set this to skip clones of repos that already exist in the working area instead of raising an
@@ -173,19 +182,24 @@ Here are the command-line arguments you can supply to control how the script run
     the runtimes. You need extra packages to build documentation; see above for what you need.
 - `--compile-jobs`  
     Set the number of parallel compile processes to run when building any of the tools and when
-    creating the device files. The default is 0, which will use one process per CPU. One per CPU is
-    also the maximum allowed.
+    creating the device files. The default is 0, which will use one process per CPU. Two per CPU
+    is the maximum allowed.
 - `--link-jobs`  
     Set the number of parallel link processes to run when building the LLVM tools. The default is 1,
-    which will perform one link at a time. You can increase this if you have plenty of CPU core and
-    RAM. LLVM docs recommend one process per 15GB of memory available.
+    which will perform one link at a time. You can increase this if you have plenty of CPU cores and
+    RAM. LLVM docs recommend one process per 15GB of memory available. The max is two per CPU, but
+    you probably do not want to do that.
 - `--version`  
     Print the script's version info and then exit.
 
 
 ## Some Examples
-Here are a few example commands you can run. Remember that on Linux you might need to use
-`chmod -x ./buildMchpClang.py` to make this script runnable.
+Here are a few example commands you can run. These assume that your command prompt is at the directory
+in which the script is located. You can run the script from a different directory if you want. The
+script will create a `mchpclang/` subdirectory in the directory from which you run it.
+
+Remember that on Linux you might need to use `chmod -x ./buildMchpClang.py` to make this script
+runnable.
 
 **Standard Build**  
 If you are running this script for the very first time, then you can start by running it with no
@@ -201,8 +215,8 @@ python3 .\buildMchpClang.py
 
 This will apply useful defaults, which will clone all of the needed repos from Git and build them all
 in Release mode. This will also build documentation for LLVM, the runtime libraries, and for mchpClang
-itself. The final installation will be compressed into an archive that will be located in the `mchpClang`
-subfolder generated by this script.
+itself. All of the sources and the final installation will be compressed into two archives that will
+be located in the `mchpClang/` subdirectory generated by this script.
 
 This script will pop up a dialog box to ask you where your device pack files are. If you do not want
 this, use the `--packs-dir` option to tell this script where the device packs are instead.
@@ -212,7 +226,7 @@ last time this script was updated. Use the `--XXX-branch` options described abov
 tag or branch.
 
 If you get an error saying that you are trying to clone repositories that already exist, you can
-delete those repos (or just delete the whole `mchpClang` subdirectory) and try again. You can also
+delete those repos (or just delete the whole `mchpClang/` subdirectory) and try again. You can also
 use the `--skip-existing` option to ignore existing repositories and continue on. That option can be
 useful if you have already run the script once and need to run it again without re-cloning repos.
 
@@ -225,29 +239,27 @@ to clone the needed repositories without building anything.
 
 ```
 # Linux/Unix
-./buildMchpClang.py --steps clone --clone-all
+./buildMchpClang.py --steps clone sources --clone-all
 
 # Windows
-python3 .\buildMchpClang.py --steps clone --clone-all
+python3 .\buildMchpClang.py --steps clone sources --clone-all
 ```
 
-This will give you the source files you need to build that version of toolchain in the future. You
-should archive the directory this README and `buildMchpClang.py` script are located in along with
-their subdirectoriees. You can ignore any `.git` folders if you have them.
-
-You will also want to find and archive the device pack files you need. You could bundle the device
-packs together with the toolchain archive to create a ready-to-build package.
+This will clone the source files you need to build that version of toolchain in the future and pack
+them into an archive. The archive will be located in the `mchpclang/` subdirectory generated by this
+script.
 
 **Building From a Source Archive**  
-If you previously ran the above command and now have an archive of the sources, you can use the
-following command to build them.
+If you previously ran the above command and now have an archive of the sources, extract the contents
+of the archive and navigate your console to the `buildMchpClang.py` script in the newly-created
+directory. You can use the following command to build the sources.
 
 ```
 # Linux/Unix
 ./buildMchpClang.py --skip-existing --packs-dir <your packs location>
 
 # Windows
-.\buildMchpClang.py --skip-existing --packs-dir <your packs location>
+python3 .\buildMchpClang.py --skip-existing --packs-dir <your packs location>
 ```
 
 
