@@ -21,7 +21,7 @@
    Make it an Intel Hex file with 'path/to/llvm-objcopy -O ihex interrupt.elf interrupt.hex'
    */
 
-#include <which_pic32.h>
+#include <which_device.h>
 #include <stdint.h>
 #include <stdbool.h>
 

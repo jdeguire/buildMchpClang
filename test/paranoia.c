@@ -2262,7 +2262,7 @@ History(void)
 /*********
  * STUFF FOR TESTING ON PIC32CZ CA80 CURIOSITY ULTRA BOARD!!
  ********/
-#include <which_pic32.h>
+#include <which_device.h>
 #include <stdint.h>
 
 /* We're going to bit-bang a serial port because I don't feel like trying to figure out how the
