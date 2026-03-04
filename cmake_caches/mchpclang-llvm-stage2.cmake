@@ -14,6 +14,8 @@
 set(LLVM_ENABLE_PROJECTS "clang;clang-tools-extra;lld;lldb;polly" CACHE STRING "")
 set(LLVM_ENABLE_RUNTIMES "" CACHE STRING "")
 
+# TODO: We had to add "host" here because libc needed it to build stuff that it uses in its build.
+#       Is this still needed?
 set(LLVM_TARGETS_TO_BUILD host;ARM;Mips CACHE STRING "")
 
 # Add targets to build documentation using the Sphinx document generator if LLVM_BUILD_DOCS is ON.
@@ -60,7 +62,6 @@ set(CLANG_CONFIG_FILE_SYSTEM_DIR "../config" CACHE STRING "")
 # These are names of subdirectories under "llvm/llvm/tools".
 set(LLVM_INSTALL_TOOLCHAIN_ONLY OFF CACHE BOOL "")
 set(LLVM_TOOLCHAIN_TOOLS
-  bugpoint
   dsymutil
   llc
   llvm-ar
@@ -68,9 +69,11 @@ set(LLVM_TOOLCHAIN_TOOLS
   llvm-cov
   llvm-cxxfilt
   llvm-dwarfdump
+  llvm-dwp
   llvm-lto
   llvm-lto2
   llvm-mc
+  llvm-mca
   llvm-nm
   llvm-objcopy
   llvm-objdump
@@ -79,9 +82,11 @@ set(LLVM_TOOLCHAIN_TOOLS
   llvm-ranlib
   llvm-readelf
   llvm-readobj
+  llvm-reduce
   llvm-remarkutil
   llvm-size
   llvm-strings
+  llvm-strip
   llvm-symbolizer
   opt
   CACHE STRING "")

@@ -57,7 +57,7 @@ import tarfile
 import time
 import zipfile
 
-MCHP_CLANG_VERSION = '0.6.0'
+MCHP_CLANG_VERSION = '0.6.1'
 MCHP_CLANG_PROJECT_URL = 'https://github.com/jdeguire/buildMchpClang'
 
 
@@ -82,7 +82,7 @@ CMSIS_REPO_BRANCH = 'v6.3.0'
 CMSIS_SRC_DIR = ROOT_WORKING_DIR / 'cmsis'
 
 ATDF_FILE_MAKER_REPO_URL = 'https://github.com/jdeguire/atdf-device-file-maker.git'
-ATDF_FILE_MAKER_REPO_BRANCH = 'v0.6.2'
+ATDF_FILE_MAKER_REPO_BRANCH = 'v0.6.3'
 ATDF_FILE_MAKER_SRC_DIR = ROOT_WORKING_DIR / 'atdf-device-file-maker'
 
 MCHPCLANG_DOCS_REPO_URL = 'https://github.com/jdeguire/mchpclang_docs.git'
@@ -358,7 +358,7 @@ def build_two_stage_llvm(args: argparse.Namespace) -> None:
     src_dir = Path(os.path.relpath(LLVM_SRC_DIR / 'llvm', build_dir))
     cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'mchpclang-llvm-stage1.cmake',
                                              build_dir))
-    build_docs = 'args' in args.steps
+    build_docs = 'docs' in args.steps
 
     remake_dirs(build_dir)
 
@@ -403,6 +403,10 @@ def build_two_stage_llvm(args: argparse.Namespace) -> None:
     # TODO:
     # Is there really any harm in turning off LLVM_INSTALL_TOOLCHAIN_ONLY, running "stage2-install",
     # and just getting all the things?
+    # TODO TODO: 
+    # We do that now and it does work, but we are probably including more things than we need or want.
+    # I should try turning that option back on and running "stage2-install-distribution" to see what
+    # difference that makes.
 
 
 def build_llvm_runtimes(args: argparse.Namespace, variant: target_variants.TargetVariant, build_docs: bool):
@@ -413,17 +417,17 @@ def build_llvm_runtimes(args: argparse.Namespace, variant: target_variants.Targe
     by the variant. This needs to be called after LLVM has been built.
     '''
     build_dir = BUILD_PREFIX / 'runtimes' / variant.series / variant.path
-    prefix = INSTALL_PREFIX / variant.series
-    prefix_dir = Path(os.path.relpath(prefix, build_dir))
+    series_prefix = INSTALL_PREFIX / variant.series
+    series_prefix_dir = Path(os.path.relpath(series_prefix, build_dir))
     src_dir = Path(os.path.relpath(LLVM_SRC_DIR / 'runtimes', build_dir))
 
     toolchain_path = get_built_toolchain_abspath()
     cmake_config_path = Path(os.path.relpath(CMAKE_CACHE_DIR / 'mchpclang-target-runtimes.cmake',
                                              build_dir))
 
-    # This suffix goes up a level because the LLVM CMake scripts add an extra '/lib/' we don't want.
     # We add '/lib' to the end because LLVM adds that to the path in multilib.yaml.
-    libdir_suffix = Path(f'../{variant.path.as_posix()}/lib')
+    # This is something we cannot change.
+    libdir_suffix = Path(f'{variant.path.as_posix()}/lib')
 
     remake_dirs(build_dir)
 
@@ -434,7 +438,7 @@ def build_llvm_runtimes(args: argparse.Namespace, variant: target_variants.Targe
     asm_options_str = ';'.join(variant.asm_options)
     gen_cmd = [
         'cmake', '-G', 'Ninja', 
-        f'-DCMAKE_INSTALL_PREFIX={prefix_dir.as_posix()}',
+        f'-DCMAKE_INSTALL_PREFIX={series_prefix_dir.as_posix()}',
         f'-DCMAKE_BUILD_TYPE={args.llvm_build_type}',
         f'-DMCHPCLANG_LIBDIR_SUFFIX={libdir_suffix.as_posix()}',
         f'-DMCHPCLANG_TARGET_TRIPLE={variant.triple}',
@@ -483,10 +487,31 @@ def build_llvm_runtimes(args: argparse.Namespace, variant: target_variants.Targe
                     build_dir)
 
 
+    # CMake installs our runtimes into "lib/<arch_variant>/lib", which is redundant. Unfortunately,
+    # CMake barfs on install if we try to fix this by adding "../" to remove the extra "lib/".
+    # Instead, do that manually here.
+    remake_dirs(series_prefix / libdir_suffix)
+    variant_libdir = series_prefix / 'lib' / libdir_suffix
+    variant_libdir = variant_libdir.replace(series_prefix / libdir_suffix)
+    shutil.rmtree(series_prefix / 'lib', ignore_errors=True)
+
+    # Because we moved the library directory up a level above, we have to massage the libc++ modules
+    # file to match.
+    json_lines_old: list[str] = []
+    json_lines_new: list[str] = []
+    with open(variant_libdir / 'libc++.modules.json', 'r', encoding='utf-8') as f:
+        json_lines_old = f.readlines()
+
+    for line in json_lines_old:
+        json_lines_new.append(line.replace('"../', '"', 1))
+    
+    with open(variant_libdir / 'libc++.modules.json', 'w', encoding='utf-8') as f:
+        f.writelines(json_lines_new)
+
     # Docs are installed into "INSTALL_PREFIX/<series>/share/doc/Runtimes". Move them to be up with
     # the LLVM docs in "INSTALL_PREFIX/share/doc".
     if build_docs:
-        docs_src_dir = prefix / 'share' / 'doc' / 'Runtimes'
+        docs_src_dir = series_prefix / 'share' / 'doc' / 'Runtimes'
         docs_dst_dir = INSTALL_PREFIX / 'share' / 'doc' / 'Runtimes'
         
         remake_dirs(docs_dst_dir)
@@ -499,7 +524,7 @@ def build_llvm_runtimes(args: argparse.Namespace, variant: target_variants.Targe
     # the directories to install them (option LLVM_ENABLE_PER_TARGET_RUNTIME_DIR). That ends up
     # being a pain for other reasons, but we need to remove the arch from the library name to help
     # Clang find Compiler-RT in our arch-specific directory structure.
-    compiler_rt_path = prefix / variant.path / 'lib'
+    compiler_rt_path = series_prefix / variant.path / 'lib'
     for crt in compiler_rt_path.iterdir():
         if '-' in crt.name:
             if crt.name.startswith('libclang_rt.'):
@@ -517,7 +542,7 @@ def build_llvm_runtimes(args: argparse.Namespace, variant: target_variants.Targe
 
     # LLVM-libc puts the outputs into a per-target directory. We already handle this, so move the
     # libc files up a level to be with the rest of the libraries.
-    libc_path = prefix / variant.path / 'lib' / variant.triple
+    libc_path = series_prefix / variant.path / 'lib' / variant.triple
     for libc in libc_path.iterdir():
         new_path = libc.parent.parent / libc.name
         new_path.unlink(missing_ok=True)
@@ -550,11 +575,9 @@ def make_device_files(args: argparse.Namespace) -> None:
 
     # Now copy the created files into the install location.
     #
-    print('Copying device files to their proper location...', end='')
     shutil.copytree(build_dir / 'atdf-device-files',
                     INSTALL_PREFIX,
                     dirs_exist_ok=True)
-    print('Done!')
 
 
 def copy_cmsis_files() -> None:
@@ -562,11 +585,11 @@ def copy_cmsis_files() -> None:
 
     For CMSIS, there is nothing to build and so this just needs to copy files.
     '''
-    print('Copying CMSIS files to their proper location...', end='')
+    print_line_with_info_str('Copying CMSIS files to their proper location...',
+                             'Copy CMSIS files')
     shutil.copytree(CMSIS_SRC_DIR / 'CMSIS',
                     INSTALL_PREFIX / 'CMSIS',
                     dirs_exist_ok = True)
-    print('Done!')
 
 
 def build_device_startup_files() -> None:
@@ -628,11 +651,9 @@ def build_mchpclang_docs() -> None:
                    'Build mchpClang docs',
                    MCHPCLANG_DOCS_SRC_DIR)
 
-    print('Copying mchpClang docs to their proper location...', end='')
     shutil.copytree(MCHPCLANG_DOCS_SRC_DIR / 'build' / 'html',
                     INSTALL_PREFIX / 'docs',
                     dirs_exist_ok=True)
-    print('Done!')
 
 
 def archive_zip_sources(suffix: str = '') -> None:
@@ -647,7 +668,8 @@ def archive_zip_sources(suffix: str = '') -> None:
     '''
     archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_src.zip'
 
-    print(f'Archiving sources into {archive_name}; this might take a while...')
+    print_line_with_info_str(f'Archiving sources into {archive_name}; this might take a while...',
+                             'Source archive (.zip)')
 
     archive_name.unlink(missing_ok=True)
     with zipfile.ZipFile(archive_name, mode='w', compression=zipfile.ZIP_DEFLATED,
@@ -727,7 +749,8 @@ def archive_targz_sources(suffix: str = '') -> None:
     '''
     archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_src.tar.gz'
 
-    print(f'Archiving sources into {archive_name}; this might take a while...')
+    print_line_with_info_str(f'Archiving sources into {archive_name}; this might take a while...',
+                             'Source archive (.tar.gz)')
 
     archive_name.unlink(missing_ok=True)
     with tarfile.open(name=archive_name, mode='w:gz', compresslevel=9) as archive:
@@ -766,7 +789,8 @@ def package_zip_binary_distribution(suffix: str = '') -> None:
     '''
     archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_bin.zip'
 
-    print(f'Packaging binaries into {archive_name}; this might take a while...')
+    print_line_with_info_str(f'Packaging binaries into {archive_name}; this might take a while...',
+                             'Binary distribution (.zip)')
 
     archive_name.unlink(missing_ok=True)
     with zipfile.ZipFile(archive_name, mode='w', compression=zipfile.ZIP_DEFLATED,
@@ -790,7 +814,8 @@ def package_targz_binary_distribution(suffix: str = '') -> None:
     '''
     archive_name: Path = ROOT_WORKING_DIR / f'mchpclang_v{MCHP_CLANG_VERSION}{suffix}_bin.tar.gz'
 
-    print(f'Packaging binaries into {archive_name}; this might take a while...')
+    print_line_with_info_str(f'Packaging binaries into {archive_name}; this might take a while...',
+                             'Binary distribution (.tar.gz)')
 
     archive_name.unlink(missing_ok=True)
     with tarfile.open(name=archive_name, mode='w:gz', compresslevel=9) as archive:
