@@ -57,7 +57,7 @@ import tarfile
 import time
 import zipfile
 
-MCHP_CLANG_VERSION = '0.6.1'
+MCHP_CLANG_VERSION = '0.7.0'
 MCHP_CLANG_PROJECT_URL = 'https://github.com/jdeguire/buildMchpClang'
 
 
@@ -336,14 +336,30 @@ def build_single_stage_llvm(args: argparse.Namespace) -> None:
     ]
     run_subprocess(gen_cmd, 'Generate LLVM build script', build_dir)
 
-    build_cmd = ['cmake', '--build', '.']
+    build_cmd = ['cmake', '--build', '.', '--target', 'distribution']
     run_subprocess(build_cmd, 'Build LLVM', build_dir)
 
     if build_docs:
-        docs_cmd = ['cmake', '--build', '.', '--target', 'sphinx']
+        # These are the documentation targets availabe in Clang 22 if you enable LLVM_BUILD_DOCS.
+        # See "cmake_caches/mchpclang-llvm-stage1.cmake" for a bit more info.
+        doc_targets = [
+            'sphinx',
+            'install-docs-clang-html',
+            'install-docs-clang-man',
+            'install-docs-clang-tools-html',
+            'install-docs-clang-tools-man',
+            'install-docs-dsymutil-man',
+            'install-docs-lld-html',
+            'install-docs-llvm-dwarfdump-man',
+            'install-docs-llvm-html',
+            'install-docs-llvm-man',
+            'install-docs-polly-html',
+            'install-docs-polly-man'
+        ]
+        docs_cmd = ['cmake', '--build', '.', '--target'] + doc_targets
         run_subprocess(docs_cmd, 'Build LLVM Docs', build_dir)
 
-    install_cmd = ['cmake', '--build', '.', '--target', 'install']
+    install_cmd = ['cmake', '--build', '.', '--target', 'install-distribution']
     run_subprocess(install_cmd, 'Install LLVM', build_dir)
 
 
@@ -387,26 +403,27 @@ def build_two_stage_llvm(args: argparse.Namespace) -> None:
     run_subprocess(build_cmd, 'Build LLVM', build_dir)
 
     if build_docs:
-        docs_cmd = ['cmake', '--build', '.', '--target', 'stage2-sphinx']
+        # These are the documentation targets availabe in Clang 22 if you enable LLVM_BUILD_DOCS.
+        # See "cmake_caches/mchpclang-llvm-stage1.cmake" for a bit more info.
+        doc_targets = [
+            'stage2-sphinx',
+            'stage2-install-docs-clang-html',
+            'stage2-install-docs-clang-man',
+            'stage2-install-docs-clang-tools-html',
+            'stage2-install-docs-clang-tools-man',
+            'stage2-install-docs-dsymutil-man',
+            'stage2-install-docs-lld-html',
+            'stage2-install-docs-llvm-dwarfdump-man',
+            'stage2-install-docs-llvm-html',
+            'stage2-install-docs-llvm-man',
+            'stage2-install-docs-polly-html',
+            'stage2-install-docs-polly-man'
+        ]
+        docs_cmd = ['cmake', '--build', '.', '--target'] + doc_targets
         run_subprocess(docs_cmd, 'Build LLVM Docs', build_dir)
 
-    install_cmd = ['cmake', '--build', '.', '--target', 'stage2-install']
+    install_cmd = ['cmake', '--build', '.', '--target', 'stage2-install-distribution']
     run_subprocess(install_cmd, 'Install LLVM', build_dir)
-
-    # NOTE:
-    # The stage2 CMake file turns ON LLVM_INSTALL_TOOLCHAIN_ONLY, which means documents are not
-    # installed. We can retrieve the main Clang docs from "STAGE2_BINS/tools/<proj>/docs" (seemingly
-    # just clang, lld, and polly), "STAGE2_BINS/tools/clang/tools/extra/docs", and "STAGE2_BINS/docs".
-    # That last one is mainly for developers and contains the stuff about how to build LLVM, contribute,
-    # fixes, and documentation on internals.
-    #
-    # TODO:
-    # Is there really any harm in turning off LLVM_INSTALL_TOOLCHAIN_ONLY, running "stage2-install",
-    # and just getting all the things?
-    # TODO TODO: 
-    # We do that now and it does work, but we are probably including more things than we need or want.
-    # I should try turning that option back on and running "stage2-install-distribution" to see what
-    # difference that makes.
 
 
 def build_llvm_runtimes(args: argparse.Namespace, variant: target_variants.TargetVariant, build_docs: bool):

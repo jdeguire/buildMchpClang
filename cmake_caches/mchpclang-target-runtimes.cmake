@@ -75,7 +75,8 @@ set(MCHPCLANG_COMMON_FLAGS
     # This is already defined by libc++ since we are using LLVM-libc.
     #-D_LIBCPP_HAS_TIMESPEC_GET
     -D_LIBCPP_HAS_C11_FEATURES
-    -D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE
+    # This is already defined by libc++ since we are using LLVM-libc.
+    # -D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE
     # The Libc build turns warning into errors and this prevents such an error from
     # showing up an v6m targets. They do not support the ARM atomic instructions.
     -Wno-atomic-alignment

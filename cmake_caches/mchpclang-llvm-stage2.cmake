@@ -18,8 +18,9 @@ set(LLVM_ENABLE_RUNTIMES "" CACHE STRING "")
 #       Is this still needed?
 set(LLVM_TARGETS_TO_BUILD host;ARM;Mips CACHE STRING "")
 
-# Add targets to build documentation using the Sphinx document generator if LLVM_BUILD_DOCS is ON.
+# If LLVM_BUILD_DOCS is ON, then supply options to use Sphinx to make HTML docs and manpages.
 if(LLVM_BUILD_DOCS  OR  BOOTSTRAP_LLVM_BUILD_DOCS)
+  set(LLVM_BUILD_DOCS ON CACHE BOOL "")
   set(LLVM_INCLUDE_DOCS ON CACHE BOOL "")
   set(LLVM_ENABLE_SPHINX ON CACHE BOOL "")
   set(SPHINX_WARNINGS_AS_ERRORS OFF CACHE BOOL "")
@@ -60,6 +61,7 @@ set(CLANG_CONFIG_FILE_SYSTEM_DIR "../config" CACHE STRING "")
 
 # Setup toolchain
 # These are names of subdirectories under "llvm/llvm/tools".
+# We need to keep this option OFF so we can install LLVM/Clang docs.
 set(LLVM_INSTALL_TOOLCHAIN_ONLY OFF CACHE BOOL "")
 set(LLVM_TOOLCHAIN_TOOLS
   dsymutil

@@ -44,11 +44,43 @@ set(COMPILER_RT_BUILD_MEMPROF OFF CACHE BOOL "")
 set(COMPILER_RT_BUILD_CTX_PROFILE OFF CACHE BOOL "")
 set(COMPILER_RT_BUILD_ORC OFF CACHE BOOL "")
 
-# Expose stage2 targets through the stage1 build configuration.
+# If LLVM_BUILD_DOCS is ON, then we want to add targets to build and install documentation. To see 
+# what documentation targets are avaiable, you need to generate a configuration with LLVM_BUILD_DOCS
+# enabled. Then go into the build directory ("mchpclang/build/llvm" if you are using this with the
+# "buildMchpClang.py" script) and run "cmake --build . --target help | grep install-docs".
+if(LLVM_BUILD_DOCS  OR  BOOTSTRAP_LLVM_BUILD_DOCS)
+  set(doc_targets
+    sphinx
+    install-docs-clang-html
+    install-docs-clang-man
+    install-docs-clang-tools-html
+    install-docs-clang-tools-man
+    # there is no install-docs-dsymutil-html target
+    install-docs-dsymutil-man
+    install-docs-lld-html
+    # there is no install-docs-lld-man target
+    # there is no install-docs-llvm-dwarfdump-html target
+    install-docs-llvm-dwarfdump-man
+    install-docs-llvm-html
+    install-docs-llvm-man
+    install-docs-polly-html
+    install-docs-polly-man
+  )
+else()
+  set(doc_targets "")
+endif()
+
+# This creates "stage2-<target>" entries that redirect to "<target>" entries in the stage2 build
+# script. This is mainly for convenience to let you access stage2 stuff from the top-level build
+# directory. Presumably, LLVM's CMake stuff sets up dependency stuff since running, for example,
+# "stage2-distribution" will build the stage1 compiler first if needed.
+#
+# The stage2 stuff is put into the build directory at "tools/clang/stage2-bins".
 set(CLANG_BOOTSTRAP_TARGETS
   check-all
   check-llvm
   check-clang
+  clang
   llvm-config
   test-suite
   test-depends
@@ -56,8 +88,9 @@ set(CLANG_BOOTSTRAP_TARGETS
   clang-test-depends
   distribution
   install-distribution
-  sphinx
-  clang CACHE STRING "")
+  ${doc_targets}
+  CACHE STRING ""
+)
 
 # Setup the bootstrap build.
 set(CLANG_ENABLE_BOOTSTRAP ON CACHE BOOL "")
