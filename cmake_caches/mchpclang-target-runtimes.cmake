@@ -240,13 +240,14 @@ set(LIBC_CONF_PRINTF_DISABLE_FLOAT OFF CACHE BOOL "")
 set(LIBC_CONF_PRINTF_FLOAT_TO_STR_NO_SPECIALIZE_LD ON CACHE BOOL "")
 set(LIBC_CONF_PRINTF_FLOAT_TO_STR_USE_DYADIC_FLOAT ON CACHE BOOL "")
 # Enabling this FLOAT320 option will reduce binary size by 9kB but make floating point conversions
-# take about twice as long (~350us vs ~180us in a very basic example). This assumes that
-# LIBC_COPT_FLOAT_TO_STR_NO_TABLE is defined in the runtime flags above.
-set(LIBC_CONF_PRINTF_FLOAT_TO_STR_USE_FLOAT320 OFF CACHE BOOL "")
+# take about twice as long (see "test/hello.c"). This assumes that LIBC_COPT_FLOAT_TO_STR_NO_TABLE
+# is defined in the runtime flags above.
+set(LIBC_CONF_PRINTF_FLOAT_TO_STR_USE_FLOAT320 ON CACHE BOOL "")
 set(LIBC_CONF_PRINTF_FLOAT_TO_STR_USE_MEGA_LONG_DOUBLE_TABLE OFF CACHE BOOL "")
 # This enables a modular printf so that floating-point support is linked in only if needed.
 # Support for this was initially added in March 2026.
 set(LIBC_CONF_PRINTF_MODULAR ON CACHE BOOL "")
+set(LIBC_CONF_PRINTF_RUNTIME_DISPATCH ON CACHE BOOL "")
 
 set(LIBC_CONF_SCANF_DISABLE_FLOAT OFF CACHE BOOL "")
 set(LIBC_CONF_SCANF_DISABLE_INDEX_MODE ON CACHE BOOL "")
