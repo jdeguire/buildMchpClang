@@ -244,7 +244,7 @@ set(LIBC_CONF_PRINTF_FLOAT_TO_STR_USE_DYADIC_FLOAT ON CACHE BOOL "")
 # LIBC_COPT_FLOAT_TO_STR_NO_TABLE is defined in the runtime flags above.
 set(LIBC_CONF_PRINTF_FLOAT_TO_STR_USE_FLOAT320 OFF CACHE BOOL "")
 set(LIBC_CONF_PRINTF_FLOAT_TO_STR_USE_MEGA_LONG_DOUBLE_TABLE OFF CACHE BOOL "")
-# This enables a modulat printf so that floating-point support is linked in only if needed.
+# This enables a modular printf so that floating-point support is linked in only if needed.
 # Support for this was initially added in March 2026.
 set(LIBC_CONF_PRINTF_MODULAR ON CACHE BOOL "")
 
@@ -305,6 +305,10 @@ set(LIBCXX_ENABLE_RANDOM_DEVICE OFF CACHE BOOL "")
 # Libc++abi
 #
 set(LIBCXXABI_BAREMETAL ON CACHE BOOL "")
+# The default abort and terminate handlers try to print info about uncaught or unexpected exceptions.
+# The demangler code is huge and a baremetal app probably would want its own handlers, so disable this.
+set(LIBCXXABI_SILENT_TERMINATE ON CACHE BOOL "")
+set(LIBCXXABI_NON_DEMANGLING_TERMINATE ON CACHE BOOL "")
 set(LIBCXXABI_ENABLE_STATIC ON CACHE BOOL "")
 set(LIBCXXABI_ENABLE_SHARED OFF CACHE BOOL "")
 set(LIBCXXABI_USE_LLVM_UNWINDER ON CACHE BOOL "")

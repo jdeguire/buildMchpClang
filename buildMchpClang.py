@@ -57,7 +57,7 @@ import tarfile
 import time
 import zipfile
 
-MCHP_CLANG_VERSION = '0.9.0'
+MCHP_CLANG_VERSION = '0.10.0'
 MCHP_CLANG_PROJECT_URL = 'https://github.com/jdeguire/buildMchpClang'
 
 
